@@ -1,7 +1,7 @@
-const { EmbedBuilder } = require('discord.js');
-const moment = require('moment-timezone');
 const fs = require('fs-extra');
 const path = require('path');
+const { EmbedBuilder, WebhookClient } = require('discord.js');
+const moment = require('moment-timezone');
 
 class Logger {
     constructor() {

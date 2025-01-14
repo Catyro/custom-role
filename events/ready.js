@@ -1,9 +1,7 @@
-const { Events } = require('discord.js');
-const Logger = require('/home/container/utils/logger');
-const RoleManager = require('/home/container/utils/role-manager');
-const { EmbedBuilder } = require('discord.js');
+const { Events, ActivityType } = require('discord.js');
+const Logger = require('../utils/logger');
+const config = require('../config');
 const moment = require('moment-timezone');
-const { version } = require('/home/container/package.json');
 
 class ReadyHandler {
     static async handle(client) {

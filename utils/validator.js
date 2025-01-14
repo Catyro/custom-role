@@ -1,4 +1,8 @@
-const { Collection } = require('discord.js');
+const axios = require('axios');
+const sharp = require('sharp');
+
+const MAX_IMAGE_SIZE = 256 * 1024; // 256KB
+const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg'];
 
 class Validator {
     static cooldowns = new Collection();

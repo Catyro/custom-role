@@ -1,8 +1,14 @@
-const { Events, EmbedBuilder } = require('discord.js');
-const EmbedService = require('/home/container/utils/embed-builder');
-const RoleManager = require('/home/container/utils/role-manager');
-const Logger = require('/home/container/utils/logger');
-const Validator = require('/home/container/utils/validator');
+const { 
+    Events, 
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle 
+} = require('discord.js');
+const EmbedService = require('../utils/embed-builder');
+const RoleManager = require('../utils/role-manager');
+const Logger = require('../utils/logger');
+const Validator = require('../utils/validator');
 
 class ModalSubmitHandler {
     static async handle(interaction) {

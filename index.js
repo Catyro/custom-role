@@ -1,8 +1,16 @@
 const fs = require('fs');
 const path = require('path');
-const { Client, Collection, GatewayIntentBits } = require('discord.js');
-const Logger = require('/home/container/utils/logger');
-const config = require('/home/container/config');
+const { 
+    Client, 
+    Collection, 
+    GatewayIntentBits, 
+    Partials,
+    ActivityType,
+    REST,
+    Routes
+} = require('discord.js');
+const Logger = require('./utils/logger');
+const config = require('./config.js');
 // Fungsi untuk mendapatkan waktu Jakarta
 const getJakartaTime = () => {
     const now = new Date();

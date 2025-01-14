@@ -1,13 +1,14 @@
-const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder } = require('discord.js');
-const EmbedService = require('/home/container/utils/embed-builder');
-const RoleManager = require('/home/container/utils/role-manager');
-const Validator = require('/home/container/utils/validator');
-const Logger = require('/home/container/utils/logger');
+const { 
+    SlashCommandBuilder,
+    PermissionFlagsBits
+} = require('discord.js');
+const Logger = require('../utils/logger');
+const RoleManager = require('../utils/role-manager');
+const EmbedService = require('../utils/embed-builder');
+const Validator = require('../utils/validator');
 const moment = require('moment-timezone');
 
-// Constants
-const MAX_ICON_SIZE = 256 * 1024; // 256KB in bytes
+const MAX_ICON_SIZE = 256 * 1024; // 256KB
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg'];
 
 module.exports = {

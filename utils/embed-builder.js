@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const config = require('../config');
 
 const Colors = {
     SUCCESS: '#00FF00',

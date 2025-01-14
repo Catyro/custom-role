@@ -1,7 +1,9 @@
-const { Events } = require('discord.js');
-const Logger = require('/home/container/utils/logger');
-const RoleManager = require('/home/container/utils/role-manager');
-const EmbedService = require('/home/container/utils/embed-builder');
+const { Events, EmbedBuilder } = require('discord.js');
+const Logger = require('../utils/logger');
+const RoleManager = require('../utils/role-manager');
+const EmbedService = require('../utils/embed-builder');
+const config = require('../config');
+const moment = require('moment-timezone');
 
 class BoostHandler {
     static warningTimeouts = new Map();

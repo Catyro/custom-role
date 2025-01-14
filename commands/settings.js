@@ -1,6 +1,10 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const Logger = require('/home/container/utils/logger');
-const moment = require('moment-timezone');
+const { 
+    SlashCommandBuilder,
+    PermissionFlagsBits
+} = require('discord.js');
+const Logger = require('../utils/logger');
+const EmbedService = require('../utils/embed-builder');
+const config = require('../config');
 
 // Fungsi untuk format footer yang konsisten
 function getFooterText(interaction) {
