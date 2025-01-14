@@ -5,8 +5,8 @@ const EmbedService = require('../utils/embed-builder');
 const RoleManager = require('../utils/role-manager');
 const Logger = require('../utils/logger');
 
-// Simpan referensi scheduled jobs
-const scheduledJobs = new Map();
+// Simpan job schedules
+const warningJobs = new Map();
 
 module.exports = {
     name: Events.GuildMemberUpdate,
@@ -15,9 +15,10 @@ module.exports = {
         if (!oldMember.premiumSince && newMember.premiumSince) {
             try {
                 const boostCount = await RoleManager.getBoostCount(newMember.id);
-                const opportunities = boostCount - RoleManager.getUserRoles(newMember.id).length;
+                const userRoles = await RoleManager.getUserRoles(newMember.guild.id, newMember.id);
+                const opportunities = boostCount - userRoles.length;
 
-                // Coba kirim DM dengan safe handling
+                // DM user with initial message
                 try {
                     const embed = EmbedService.customRole(boostCount, opportunities);
                     const message = await newMember.send({
@@ -28,12 +29,13 @@ module.exports = {
                     // Store message ID for later reference
                     await RoleManager.setActiveMessage(newMember.id, message.id);
                 } catch (dmError) {
-                    console.log(`Tidak dapat mengirim DM ke ${newMember.user.tag}: ${dmError.message}`);
-                    // Log ke channel khusus jika DM gagal
-                    await Logger.log('DM_FAILED', {
+                    console.error('Error sending DM:', dmError);
+                    // Log DM failure but continue execution
+                    await Logger.log('WARNING', {
+                        type: 'DM_FAILED',
                         userId: newMember.id,
-                        reason: dmError.message,
-                        timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                        reason: 'Cannot send DM to user',
+                        timestamp: moment().tz('Asia/Jakarta').format()
                     });
                 }
 
@@ -41,12 +43,10 @@ module.exports = {
                 await Logger.log('BOOST_START', {
                     userId: newMember.id,
                     guildId: newMember.guild.id,
-                    boostCount,
-                    opportunities,
-                    timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                    timestamp: moment().tz('Asia/Jakarta').format()
                 });
 
-                // Schedule warning menggunakan node-schedule
+                // Schedule 24h warning
                 scheduleBoostWarning(newMember);
 
             } catch (error) {
@@ -55,7 +55,7 @@ module.exports = {
                     type: 'BOOST_HANDLER',
                     userId: newMember.id,
                     error: error.message,
-                    timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                    timestamp: moment().tz('Asia/Jakarta').format()
                 });
             }
         }
@@ -81,85 +81,76 @@ function createInitialButtons() {
 
 async function handleBoostEnd(member) {
     try {
-        // Cancel scheduled warnings if any
-        const jobKey = `boost_warning_${member.id}`;
-        if (scheduledJobs.has(jobKey)) {
-            scheduledJobs.get(jobKey).cancel();
-            scheduledJobs.delete(jobKey);
+        // Cancel any scheduled warnings
+        const jobKey = `warning_${member.id}`;
+        if (warningJobs.has(jobKey)) {
+            warningJobs.get(jobKey).cancel();
+            warningJobs.delete(jobKey);
         }
 
-        // Remove all custom roles created by this booster
+        // Get all custom roles before clearing
         const userRoles = await RoleManager.getUserRoles(member.guild.id, member.id);
+        
+        // Remove all custom roles created by this booster
         for (const roleData of userRoles) {
             try {
                 const role = await member.guild.roles.fetch(roleData.roleId);
                 if (role) {
-                    // Get target member dengan safe handling
-                    try {
-                        const targetMember = await member.guild.members.fetch(roleData.targetId);
-                        if (targetMember) {
-                            await targetMember.roles.remove(role);
-                            
-                            // Notify target member
-                            try {
-                                await targetMember.send({
-                                    embeds: [
-                                        EmbedService.info(
-                                            'Role Dihapus',
-                                            `Role ${role.name} telah dihapus karena pemberi boost telah berhenti boost server.`
-                                        )
-                                    ]
-                                });
-                            } catch (dmError) {
-                                console.log(`Tidak dapat mengirim DM ke ${targetMember.user.tag}`);
-                            }
-                        }
-                    } catch (memberError) {
-                        console.error(`Error fetching target member: ${memberError.message}`);
+                    // Get target member
+                    const targetMember = await member.guild.members.fetch(roleData.targetId).catch(() => null);
+                    if (targetMember) {
+                        await targetMember.roles.remove(role).catch(console.error);
                     }
-                    
-                    // Delete role
-                    await role.delete('Boost ended');
+                    await role.delete('Boost ended').catch(console.error);
                 }
             } catch (roleError) {
-                console.error(`Error handling role ${roleData.roleId}: ${roleError.message}`);
+                console.error(`Error handling role ${roleData.roleId}:`, roleError);
             }
         }
 
         // Clear user's custom roles from database
         await RoleManager.clearUserRoles(member.guild.id, member.id);
 
-        // Remove active message if exists dengan safe handling
-        const messageId = await RoleManager.getActiveMessage(member.id);
-        if (messageId) {
-            try {
-                const dmChannel = await member.createDM();
-                const message = await dmChannel.messages.fetch(messageId);
-                if (message) await message.delete();
-            } catch (error) {
-                console.log('Error deleting message:', error.message);
+        // Remove active message if exists
+        try {
+            const messageId = await RoleManager.getActiveMessage(member.id);
+            if (messageId) {
+                const dmChannel = await member.createDM().catch(() => null);
+                if (dmChannel) {
+                    const message = await dmChannel.messages.fetch(messageId).catch(() => null);
+                    if (message) await message.delete().catch(console.error);
+                }
             }
+        } catch (messageError) {
+            console.error('Error handling active message:', messageError);
         }
 
         // Log boost end
         await Logger.log('BOOST_END', {
             userId: member.id,
             guildId: member.guild.id,
-            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            timestamp: moment().tz('Asia/Jakarta').format()
         });
 
-        // Notify user dengan safe handling
+        // Notify user about boost end
         try {
             await member.send({
                 embeds: [
                     EmbedService.info(
                         'Boost Berakhir',
-                        'Server boost Anda telah berakhir. Semua custom role yang terkait telah dihapus.'
+                        [
+                            '🔔 Server boost Anda telah berakhir.',
+                            '',
+                            '• Semua custom role yang terkait telah dihapus',
+                            '• Untuk membuat custom role baru, Anda perlu boost server lagi',
+                            '',
+                            'Terima kasih telah mendukung server kami! 🙏'
+                        ].join('\n')
                     )
                 ]
             });
-        } catch (dmError) {
-            console.log(`Tidak dapat mengirim DM ke ${member.user.tag}`);
+        } catch (notifyError) {
+            console.error('Error sending boost end notification:', notifyError);
         }
 
     } catch (error) {
@@ -167,79 +158,78 @@ async function handleBoostEnd(member) {
         await Logger.log('ERROR', {
             type: 'BOOST_END_HANDLER',
             userId: member.id,
-            guildId: member.guild.id,
             error: error.message,
-            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            timestamp: moment().tz('Asia/Jakarta').format()
         });
     }
 }
 
 function scheduleBoostWarning(member) {
-    const jobKey = `boost_warning_${member.id}`;
+    try {
+        // Cancel existing warning if any
+        const jobKey = `warning_${member.id}`;
+        if (warningJobs.has(jobKey)) {
+            warningJobs.get(jobKey).cancel();
+        }
 
-    // Cancel existing job if any
-    if (scheduledJobs.has(jobKey)) {
-        scheduledJobs.get(jobKey).cancel();
-    }
+        // Calculate warning time (24 hours before boost ends)
+        const boostEndDate = moment(member.premiumSince).add(30, 'days');
+        const warningDate = boostEndDate.clone().subtract(24, 'hours');
 
-    // Calculate warning time (24 hours before boost ends)
-    const boostEndDate = moment(member.premiumSince)
-        .add(30, 'days')
-        .tz('Asia/Jakarta');
-    
-    const warningDate = moment(boostEndDate)
-        .subtract(24, 'hours')
-        .tz('Asia/Jakarta');
-
-    // Only schedule if warning time is in the future
-    if (warningDate.isAfter(moment())) {
-        const job = schedule.scheduleJob(warningDate.toDate(), async () => {
-            try {
-                // Check if still boosting
-                const updatedMember = await member.guild.members.fetch(member.id);
-                if (updatedMember.premiumSince) {
-                    try {
+        // Only schedule if warning time is in the future
+        if (warningDate.isAfter(moment())) {
+            const job = schedule.scheduleJob(warningDate.toDate(), async () => {
+                try {
+                    // Verify member is still boosting
+                    const updatedMember = await member.guild.members.fetch(member.id);
+                    if (updatedMember.premiumSince) {
                         await member.send({
                             embeds: [
                                 EmbedService.warning(
-                                    'Peringatan Boost',
+                                    '⚠️ Peringatan Boost',
                                     [
-                                        '⚠️ Boost Anda akan berakhir dalam 24 jam.',
-                                        'Pastikan untuk memperpanjang boost agar custom role Anda tetap aktif.',
+                                        'Boost Anda akan berakhir dalam 24 jam.',
                                         '',
-                                        `Waktu berakhir: ${boostEndDate.format('DD MMMM YYYY HH:mm')} WIB`
+                                        '• Custom role Anda akan dihapus jika boost berakhir',
+                                        '• Perpanjang boost untuk mempertahankan custom role',
+                                        '',
+                                        `Waktu berakhir: ${boostEndDate.tz('Asia/Jakarta').format('DD MMM YYYY HH:mm')} WIB`
                                     ].join('\n')
                                 )
                             ]
                         });
 
-                        await Logger.log('BOOST_WARNING_SENT', {
+                        await Logger.log('BOOST_WARNING', {
                             userId: member.id,
                             guildId: member.guild.id,
-                            expiryDate: boostEndDate.format(),
-                            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                            expiryTime: boostEndDate.format(),
+                            timestamp: moment().tz('Asia/Jakarta').format()
                         });
-                    } catch (dmError) {
-                        console.log(`Tidak dapat mengirim warning DM ke ${member.user.tag}`);
                     }
+                } catch (error) {
+                    console.error('Error in warning job:', error);
+                    await Logger.log('ERROR', {
+                        type: 'BOOST_WARNING',
+                        userId: member.id,
+                        error: error.message,
+                        timestamp: moment().tz('Asia/Jakarta').format()
+                    });
+                } finally {
+                    // Clean up job
+                    warningJobs.delete(jobKey);
                 }
-            } catch (error) {
-                console.error('Error in boost warning job:', error);
-            } finally {
-                // Clean up job reference
-                scheduledJobs.delete(jobKey);
-            }
-        });
+            });
 
-        // Store job reference
-        scheduledJobs.set(jobKey, job);
-
-        // Log scheduled warning
-        Logger.log('BOOST_WARNING_SCHEDULED', {
+            // Store job reference
+            warningJobs.set(jobKey, job);
+        }
+    } catch (error) {
+        console.error('Error scheduling boost warning:', error);
+        Logger.log('ERROR', {
+            type: 'BOOST_WARNING_SCHEDULE',
             userId: member.id,
-            guildId: member.guild.id,
-            scheduledFor: warningDate.format(),
-            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            error: error.message,
+            timestamp: moment().tz('Asia/Jakarta').format()
         });
     }
 }
