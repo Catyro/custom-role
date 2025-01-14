@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const moment = require('moment-timezone');
 
 class Logger {
     constructor() {
@@ -6,8 +7,6 @@ class Logger {
         this.logChannel = null;
         this.maxLogs = 1000;
         this.client = null;
-        this.currentUser = 'Catyro';
-        this.defaultTimestamp = '2025-01-14 11:50:21';
     }
 
     setClient(client) {
@@ -15,22 +14,16 @@ class Logger {
         return true;
     }
 
-    formatDate(date = this.defaultTimestamp) {
-        if (typeof date === 'string') {
-            return date;
-        }
-        const d = date instanceof Date ? date : new Date(date);
-        const pad = (n) => n.toString().padStart(2, '0');
-        
-        return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+    formatDate(timestamp = null) {
+        return moment(timestamp).tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
     }
 
     async log(type, details) {
         const logEntry = {
             type,
             ...details,
-            timestamp: details.timestamp || this.defaultTimestamp,
-            user: details.user || this.currentUser
+            timestamp: details.timestamp || this.formatDate(),
+            user: details.user || (details.userId ? `<@${details.userId}>` : 'System')
         };
 
         this.logs.unshift(logEntry);
@@ -125,7 +118,9 @@ class Logger {
             'SYSTEM': '⚙️',
             'SHUTDOWN': '💤',
             'BOOST': '🚀',
-            'UNBOOST': '📉'
+            'UNBOOST': '📉',
+            'BUTTON_INTERACTION': '🔘',
+            'MODAL_SUBMIT': '📝'
         };
         return emojis[type] || '📝';
     }
@@ -159,17 +154,20 @@ class Logger {
             this.logChannel = channel;
             
             const testEmbed = new EmbedBuilder()
-                .setColor('#43B581')
-                .setTitle('✅ Logger Channel Set')
-                .setDescription(`This channel has been set as the logging channel.\nTimestamp: ${this.defaultTimestamp}`)
-                .setFooter({ text: this.currentUser });
+                .setColor(this.getLogColor('LOG_CHANNEL_SET'))
+                .setTitle(this.getLogTitle('LOG_CHANNEL_SET'))
+                .setDescription('Channel ini telah diatur sebagai log channel.')
+                .setTimestamp()
+                .setFooter({ 
+                    text: `Log ID: ${this.generateLogId()}`,
+                    iconURL: this.client.user.displayAvatarURL()
+                });
 
             await channel.send({ embeds: [testEmbed] });
             
             await this.log('LOG_CHANNEL_SET', {
                 channelId: channel.id,
-                userId: this.client.user.id,
-                timestamp: this.defaultTimestamp
+                userId: this.client.user.id
             });
 
             console.log(`Logger channel set to: ${channel.name} (${channel.id})`);
@@ -191,7 +189,9 @@ class Logger {
             'SYSTEM': 0x95a5a6,
             'SHUTDOWN': 0x34495e,
             'BOOST': 0xf47fff,
-            'UNBOOST': 0x747f8d
+            'UNBOOST': 0x747f8d,
+            'BUTTON_INTERACTION': 0x3498db,
+            'MODAL_SUBMIT': 0x9b59b6
         };
         return colors[type] || 0x95a5a6;
     }
@@ -207,7 +207,9 @@ class Logger {
             'SYSTEM': '⚙️ System Event',
             'SHUTDOWN': '💤 Bot Shutdown',
             'BOOST': '🚀 Server Boosted',
-            'UNBOOST': '📉 Server Boost Removed'
+            'UNBOOST': '📉 Server Boost Removed',
+            'BUTTON_INTERACTION': '🔘 Button Interaction',
+            'MODAL_SUBMIT': '📝 Modal Submitted'
         };
         return titles[type] || `📝 ${type}`;
     }
@@ -236,6 +238,10 @@ class Logger {
                 return `🎉 **${mention}** telah boost server!`;
             case 'UNBOOST':
                 return `**${mention}** telah berhenti boost server`;
+            case 'BUTTON_INTERACTION':
+                return `**${mention}** menggunakan tombol \`${logEntry.buttonId}\``;
+            case 'MODAL_SUBMIT':
+                return `**${mention}** telah submit form \`${logEntry.modalId}\``;
             default:
                 const details = logEntry.details ? `\n\`\`\`json\n${JSON.stringify(logEntry.details, null, 2)}\n\`\`\`` : '';
                 return `${logEntry.type}${details}`;
