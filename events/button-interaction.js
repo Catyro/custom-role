@@ -2,14 +2,6 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFl
 const Logger = require('../utils/logger');
 const moment = require('moment-timezone');
 
-// Utility function untuk format footer yang konsisten
-function getFormattedFooter(interaction) {
-    const jakarta = moment().tz('Asia/Jakarta');
-    const date = jakarta.format('DD-MM-YYYY');
-    const time = jakarta.format('h:mm A');
-    return `${date} | Today at ${time} | ${interaction.user.tag}`;
-}
-
 // Utility functions for creating buttons
 function createCloseButton() {
     return new ButtonBuilder()
@@ -27,19 +19,33 @@ function createBackButton() {
         .setEmoji('⬅️');
 }
 
+// Fungsi untuk format footer yang konsisten
+function getFooterText(interaction) {
+    const jakarta = moment().tz('Asia/Jakarta');
+    const date = jakarta.format('DD-MM-YYYY');
+    const time = jakarta.format('h:mm A');
+    return `${date} | Today at ${time} | ${interaction.user.tag}`;
+}
+
 async function handleListRoles(interaction, page = 0) {
     try {
+        // Dapatkan semua role dan urutkan berdasarkan posisi
         const roles = interaction.guild.roles.cache
-            .sort((a, b) => b.position - a.position)
-            .map(role => {
-                const memberCount = role.members.size;
-                return `${role} (**${memberCount}** members)`;
-            });
+            .sort((a, b) => b.position - a.position);
 
-        const itemsPerPage = 15;
+        // Format role dengan member list
+        const formattedRoles = roles.map(role => {
+            const members = role.members
+                .map(member => `- ${member.user.tag}`)
+                .join('\n');
+            return `${role} (${role.members.size} members)\n${members || '- Tidak ada member'}`;
+        });
+
+        // Split roles into chunks
+        const itemsPerPage = 5; // Kurangi jumlah role per halaman karena ada list member
         const chunks = [];
-        for (let i = 0; i < roles.length; i += itemsPerPage) {
-            chunks.push(roles.slice(i, i + itemsPerPage));
+        for (let i = 0; i < formattedRoles.length; i += itemsPerPage) {
+            chunks.push(formattedRoles.slice(i, i + itemsPerPage));
         }
 
         if (chunks.length === 0) {
@@ -50,7 +56,7 @@ async function handleListRoles(interaction, page = 0) {
                         .setTitle('❌ No Roles')
                         .setDescription('No roles found in this server.')
                         .setFooter({ 
-                            text: getFormattedFooter(interaction),
+                            text: getFooterText(interaction),
                             iconURL: interaction.client.user.displayAvatarURL()
                         })
                 ],
@@ -58,6 +64,7 @@ async function handleListRoles(interaction, page = 0) {
             });
         }
 
+        // Ensure page is within bounds
         page = Math.max(0, Math.min(page, chunks.length - 1));
 
         const embed = new EmbedBuilder()
@@ -65,12 +72,13 @@ async function handleListRoles(interaction, page = 0) {
             .setTitle(`📋 Roles List (Page ${page + 1}/${chunks.length})`)
             .setDescription(chunks[page].join('\n\n'))
             .setFooter({ 
-                text: getFormattedFooter(interaction),
+                text: getFooterText(interaction),
                 iconURL: interaction.client.user.displayAvatarURL()
             });
 
         const buttons = [];
         
+        // Add navigation buttons
         if (chunks.length > 1) {
             if (page > 0) {
                 buttons.push(
@@ -93,7 +101,9 @@ async function handleListRoles(interaction, page = 0) {
             }
         }
 
+        // Add back and close buttons
         buttons.push(createBackButton(), createCloseButton());
+
         const row = new ActionRowBuilder().addComponents(buttons);
 
         await interaction.update({ embeds: [embed], components: [row] });
@@ -106,220 +116,11 @@ async function handleListRoles(interaction, page = 0) {
                     .setTitle('❌ Error')
                     .setDescription('Terjadi kesalahan saat mengambil daftar role.')
                     .setFooter({ 
-                        text: getFormattedFooter(interaction),
+                        text: getFooterText(interaction),
                         iconURL: interaction.client.user.displayAvatarURL()
                     })
             ],
             components: [new ActionRowBuilder().addComponents(createBackButton(), createCloseButton())]
-        });
-    }
-}
-
-async function handleSetLogChannel(interaction) {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
-        return interaction.update({
-            embeds: [
-                new EmbedBuilder()
-                    .setColor(0xe74c3c)
-                    .setTitle('❌ Akses Ditolak')
-                    .setDescription('Anda tidak memiliki izin untuk mengatur log channel.')
-                    .setFooter({ 
-                        text: getFormattedFooter(interaction),
-                        iconURL: interaction.client.user.displayAvatarURL()
-                    })
-            ],
-            components: [new ActionRowBuilder().addComponents(createBackButton(), createCloseButton())]
-        });
-    }
-
-    const embed = new EmbedBuilder()
-        .setColor(0xf1c40f)
-        .setTitle('📌 Set Log Channel')
-        .setDescription([
-            'Silakan pilih atau buat channel untuk log.',
-            'Ketik ID channel atau mention channel (#nama-channel).',
-            '',
-            '**Format yang diterima:**',
-            '```',
-            '1. ID Channel (123456789012345678)',
-            '2. Mention Channel (#nama-channel)',
-            '```',
-            '',
-            '⏰ Waktu: 30 detik'
-        ].join('\n'))
-        .setFooter({ 
-            text: getFormattedFooter(interaction),
-            iconURL: interaction.client.user.displayAvatarURL()
-        });
-
-    const row = new ActionRowBuilder()
-        .addComponents(createBackButton(), createCloseButton());
-
-    const reply = await interaction.update({
-        embeds: [embed],
-        components: [row]
-    });
-
-    const filter = m => m.author.id === interaction.user.id;
-    const collector = interaction.channel.createMessageCollector({ 
-        filter, 
-        time: 30000,
-        max: 1 
-    });
-
-    collector.on('collect', async message => {
-        try {
-            await message.delete().catch(() => {});
-            const success = await Logger.setLogChannel(message.content);
-
-            if (success) {
-                const successEmbed = new EmbedBuilder()
-                    .setColor(0x2ecc71)
-                    .setTitle('✅ Log Channel Set')
-                    .setDescription(`Channel log telah diatur ke ${message.content}`)
-                    .setFooter({ 
-                        text: getFormattedFooter(interaction),
-                        iconURL: interaction.client.user.displayAvatarURL()
-                    });
-
-                await interaction.editReply({
-                    embeds: [successEmbed],
-                    components: [new ActionRowBuilder().addComponents(createBackButton(), createCloseButton())]
-                });
-
-                await Logger.log('LOG_CHANNEL_SET', {
-                    channelId: message.content.replace(/[<#>]/g, ''),
-                    userId: interaction.user.id,
-                    timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-                });
-            } else {
-                throw new Error('Failed to set log channel');
-            }
-        } catch (error) {
-            console.error('Error setting log channel:', error);
-            const errorEmbed = new EmbedBuilder()
-                .setColor(0xe74c3c)
-                .setTitle('❌ Error')
-                .setDescription('Terjadi kesalahan saat mengatur log channel.\nPastikan channel valid dan bot memiliki akses.')
-                .setFooter({ 
-                    text: getFormattedFooter(interaction),
-                    iconURL: interaction.client.user.displayAvatarURL()
-                });
-
-            await interaction.editReply({
-                embeds: [errorEmbed],
-                components: [new ActionRowBuilder().addComponents(createBackButton(), createCloseButton())]
-            });
-        }
-    });
-
-    collector.on('end', collected => {
-        if (collected.size === 0) {
-            const timeoutEmbed = new EmbedBuilder()
-                .setColor(0xe74c3c)
-                .setTitle('⏰ Waktu Habis')
-                .setDescription('Waktu pengaturan log channel telah habis.\nSilakan coba lagi.')
-                .setFooter({ 
-                    text: getFormattedFooter(interaction),
-                    iconURL: interaction.client.user.displayAvatarURL()
-                });
-
-            interaction.editReply({
-                embeds: [timeoutEmbed],
-                components: [new ActionRowBuilder().addComponents(createBackButton(), createCloseButton())]
-            });
-        }
-    });
-}
-
-async function handleViewLogs(interaction) {
-    try {
-        const logs = await Logger.getLogs(50);
-        const embed = new EmbedBuilder()
-            .setColor(0x3498db)
-            .setTitle('📋 Recent Logs')
-            .setDescription(logs || '*No logs available.*')
-            .setFooter({ 
-                text: getFormattedFooter(interaction),
-                iconURL: interaction.client.user.displayAvatarURL()
-            });
-
-        const row = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId('refresh_logs')
-                    .setLabel('Refresh')
-                    .setStyle(ButtonStyle.Primary)
-                    .setEmoji('🔄'),
-                createBackButton(),
-                createCloseButton()
-            );
-
-        await interaction.update({ embeds: [embed], components: [row] });
-    } catch (error) {
-        console.error('Error in view_logs:', error);
-        await interaction.update({
-            embeds: [
-                new EmbedBuilder()
-                    .setColor(0xe74c3c)
-                    .setTitle('❌ Error')
-                    .setDescription('Error retrieving logs.')
-                    .setFooter({ 
-                        text: getFormattedFooter(interaction),
-                        iconURL: interaction.client.user.displayAvatarURL()
-                    })
-            ],
-            components: [new ActionRowBuilder().addComponents(createBackButton(), createCloseButton())]
-        });
-    }
-}
-
-async function handleBack(interaction) {
-    try {
-        const embed = new EmbedBuilder()
-            .setColor(0x3498db)
-            .setTitle('⚙️ Bot Settings')
-            .setDescription([
-                'Welcome to the bot settings menu!',
-                'Please select an option below:',
-                '',
-                '📋 **View Logs** - View recent bot activity',
-                '📌 **Set Log Channel** - Configure logging channel',
-                '👥 **List Roles** - View all server roles',
-                '',
-                '*Note: Some options require specific permissions.*'
-            ].join('\n'))
-            .setFooter({ 
-                text: getFormattedFooter(interaction),
-                iconURL: interaction.client.user.displayAvatarURL()
-            });
-
-        const row = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId('view_logs')
-                    .setLabel('View Logs')
-                    .setStyle(ButtonStyle.Primary)
-                    .setEmoji('📋'),
-                new ButtonBuilder()
-                    .setCustomId('set_log_channel')
-                    .setLabel('Set Log Channel')
-                    .setStyle(ButtonStyle.Success)
-                    .setEmoji('📌'),
-                new ButtonBuilder()
-                    .setCustomId('list_roles')
-                    .setLabel('List Roles')
-                    .setStyle(ButtonStyle.Secondary)
-                    .setEmoji('👥'),
-                createCloseButton()
-            );
-
-        await interaction.update({ embeds: [embed], components: [row] });
-    } catch (error) {
-        console.error('Error in settings_back:', error);
-        await interaction.reply({
-            content: 'Failed to return to settings menu.',
-            ephemeral: true
         });
     }
 }
@@ -330,37 +131,6 @@ function getFooterText(interaction) {
     const date = jakarta.format('DD-MM-YYYY');
     const time = jakarta.format('h:mm A');
     return `${date} | Today at ${time} | ${interaction.user.tag}`;
-}
-
-async function handleCloseMenu(interaction) {
-    try {
-        // Cek apakah bot memiliki izin untuk menghapus pesan
-        const botMember = interaction.guild.members.me;
-        if (!botMember.permissions.has(PermissionFlagsBits.ManageMessages)) {
-            // Jika tidak punya izin, update pesan saja
-            return await interaction.update({
-                components: [],
-                embeds: [
-                    new EmbedBuilder()
-                        .setDescription('Menu telah ditutup.')
-                        .setColor(0x2f3136)
-                        .setFooter({ 
-                            text: getFooterText(interaction),
-                            iconURL: interaction.client.user.displayAvatarURL()
-                        })
-                ]
-            });
-        }
-        
-        // Jika punya izin, coba hapus pesan
-        await interaction.message.delete();
-    } catch (error) {
-        console.error('Error in handleCloseMenu:', error);
-        await interaction.reply({
-            content: 'Menu telah ditutup.',
-            ephemeral: true
-        });
-    }
 }
 
 module.exports = {
