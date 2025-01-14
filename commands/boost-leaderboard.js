@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const Logger = require('../utils/logger');
+const Logger = require('/home/container/utils/logger');
 
 // Fungsi untuk mendapatkan data boost
 async function getBoostData(guild) {
