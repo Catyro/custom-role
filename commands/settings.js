@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const Logger = require('../utils/logger');
+const moment = require('moment-timezone');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -8,8 +9,10 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
     async execute(interaction) {
-        const currentTime = '2025-01-14 12:10:18';
-        const currentUser = 'Catyro';
+        // Dapatkan waktu dalam format "Today at HH:mm"
+        const timeString = moment()
+            .tz('Asia/Jakarta')
+            .format('HH:mm');
 
         // Create main settings embed
         const embed = new EmbedBuilder()
@@ -27,7 +30,7 @@ module.exports = {
             ].join('\n'))
             .setTimestamp()
             .setFooter({ 
-                text: `Current Time (UTC): ${currentTime} | ${currentUser}`,
+                text: `Today at ${timeString}`,
                 iconURL: interaction.client.user.displayAvatarURL()
             });
 
@@ -71,7 +74,7 @@ module.exports = {
                 user: interaction.user.tag,
                 guild: interaction.guild.name,
                 channel: interaction.channel.name,
-                timestamp: currentTime
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
         } catch (error) {
             console.error('Error logging command execution:', error);
