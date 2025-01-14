@@ -1,16 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const { 
-    Client, 
-    Collection, 
-    GatewayIntentBits, 
-    Partials,
-    ActivityType,
-    REST,
-    Routes
-} = require('discord.js');
-const Logger = require('./utils/logger');
-const config = require('./config.js');
+const { Events } = require('discord.js');
+const Logger = require('../utils/logger');
+const moment = require('moment-timezone');
+const { version } = require('../package.json');
 
 // Fungsi untuk mendapatkan waktu Jakarta
 const getJakartaTime = () => {
@@ -20,322 +11,197 @@ const getJakartaTime = () => {
     return now.toISOString().replace('T', ' ').slice(0, 19);
 };
 
-// Fungsi untuk deploy commands
-async function deployCommands(commands) {
-    try {
-        console.log('Started refreshing application (/) commands.');
-        const rest = new REST({ version: '10' }).setToken(config.DISCORD_TOKEN);
-
-        await rest.put(
-            Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, config.DISCORD_GUILD_ID),
-            { body: commands }
-        );
-
-        console.log('Successfully reloaded application (/) commands.');
-    } catch (error) {
-        console.error('Error deploying commands:', error);
-        throw error;
-    }
-}
-
-// Fungsi untuk memvalidasi config
-const validateConfig = () => {
-    const requiredFields = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'DISCORD_GUILD_ID'];
-    for (const field of requiredFields) {
-        if (!config[field]) {
-            throw new Error(`Missing required config field: ${field}`);
-        }
-    }
-};
-
-// Fungsi untuk memastikan direktori ada
-const ensureDirectory = (dirPath) => {
-    try {
-        if (!fs.existsSync(dirPath)) {
-            fs.mkdirSync(dirPath, { recursive: true });
-        }
-    } catch (error) {
-        console.error(`Failed to create directory ${dirPath}:`, error);
-        throw error;
-    }
-};
-
-// Fungsi untuk graceful shutdown
-const gracefulShutdown = async () => {
-    console.log('Shutting down gracefully...');
-    await Logger.log('SHUTDOWN', {
-        message: 'Bot is shutting down',
-        timestamp: getJakartaTime()
-    });
-    client.destroy();
-    process.exit(0);
-};
-
-const client = new Client({ 
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildPresences,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.MessageContent
-    ],
-    partials: [
-        Partials.Channel,
-        Partials.Message,
-        Partials.Reaction
-    ]
-});
-
-// Collections
-client.commands = new Collection();
-client.cooldowns = new Collection();
-client.config = config;
-
-// Set client di Logger
-Logger.setClient(client);
-
-// Load dan deploy commands
-const loadAndDeployCommands = async () => {
-    const commandsPath = path.join(__dirname, 'commands');
-    ensureDirectory(commandsPath);
-    
-    const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-    const commandsData = [];
-
-    for (const file of commandFiles) {
-        const filePath = path.join(commandsPath, file);
+class ReadyHandler {
+    static async handle(client) {
         try {
-            const command = require(filePath);
-            if ('data' in command && 'execute' in command) {
-                client.commands.set(command.data.name, command);
-                commandsData.push(command.data.toJSON());
-                console.log(`✅ Loaded command: ${command.data.name}`);
-            } else {
-                console.log(`⚠️ Command at ${filePath} missing required properties`);
-            }
+            await this.initializeBot(client);
+            await this.logStartup(client);
+            await this.startPeriodicTasks(client);
         } catch (error) {
-            console.error(`❌ Error loading command ${file}:`, error);
-        }
-    }
-
-    // Deploy commands
-    await deployCommands(commandsData);
-};
-
-// Load events
-const loadEvents = async () => {
-    const eventsPath = path.join(__dirname, 'events');
-    ensureDirectory(eventsPath);
-    
-    const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
-
-    for (const file of eventFiles) {
-        const filePath = path.join(eventsPath, file);
-        try {
-            const event = require(filePath);
-            if (event.once) {
-                client.once(event.name, (...args) => event.execute(...args));
-            } else {
-                client.on(event.name, (...args) => event.execute(...args));
-            }
-            console.log(`✅ Loaded event: ${event.name}`);
-        } catch (error) {
-            console.error(`❌ Error loading event ${file}:`, error);
-        }
-    }
-};
-
-// Command handler
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-
-    const command = client.commands.get(interaction.commandName);
-    if (!command) return;
-
-    const { cooldowns } = client;
-
-    if (!cooldowns.has(command.data.name)) {
-        cooldowns.set(command.data.name, new Collection());
-    }
-
-    const now = Date.now();
-    const timestamps = cooldowns.get(command.data.name);
-    const defaultCooldownDuration = 3;
-    const cooldownAmount = (command.cooldown ?? defaultCooldownDuration) * 1000;
-
-    if (timestamps.has(interaction.user.id)) {
-        const expirationTime = timestamps.get(interaction.user.id) + cooldownAmount;
-
-        if (now < expirationTime) {
-            const timeLeft = (expirationTime - now) / 1000;
-            return interaction.reply({
-                content: `Please wait ${timeLeft.toFixed(1)} more second(s) before using \`${command.data.name}\` again.`,
-                ephemeral: true
+            console.error('Error in ready event:', error);
+            await Logger.log('ERROR', {
+                type: 'STARTUP_ERROR',
+                error: error.message,
+                stack: error.stack,
+                timestamp: getJakartaTime()
             });
         }
     }
 
-    timestamps.set(interaction.user.id, now);
-    setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
-
-    try {
-        await command.execute(interaction);
-        
-        // Log command execution
-        await Logger.log('COMMAND_EXECUTE', {
-            command: command.data.name,
-            userId: interaction.user.id,
-            user: `<@${interaction.user.id}>`,
-            timestamp: getJakartaTime()
-        });
-    } catch (error) {
-        console.error(`❌ Command error:`, error);
-        
-        // Log error
-        await Logger.log('ERROR', {
-            command: command.data.name,
-            userId: interaction.user.id,
-            user: `<@${interaction.user.id}>`,
-            error: error.message,
-            timestamp: getJakartaTime()
-        });
-
-        const errorMessage = {
-            content: 'There was an error while executing this command!',
-            ephemeral: true,
-            embeds: [{
-                color: parseInt(config.EMBED_COLORS.ERROR.replace('#', ''), 16),
-                description: `Error: ${error.message}`
-            }]
-        };
-
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp(errorMessage);
-        } else {
-            await interaction.reply(errorMessage);
-        }
-    }
-});
-
-// Rate limit handler
-client.on('rateLimit', (rateLimitInfo) => {
-    console.warn('Rate limit hit:', rateLimitInfo);
-    Logger.log('SYSTEM', {
-        type: 'RATE_LIMIT',
-        message: `Rate limit hit: ${rateLimitInfo.timeout}ms (${rateLimitInfo.limit} requests)`,
-        timestamp: getJakartaTime()
-    });
-});
-
-// Handle process events
-process.on('unhandledRejection', error => {
-    console.error('❌ Unhandled promise rejection:', error);
-    Logger.log('ERROR', {
-        type: 'UNHANDLED_REJECTION',
-        error: error.message,
-        timestamp: getJakartaTime()
-    });
-});
-
-process.on('uncaughtException', error => {
-    console.error('❌ Uncaught exception:', error);
-    Logger.log('ERROR', {
-        type: 'UNCAUGHT_EXCEPTION',
-        error: error.message,
-        timestamp: getJakartaTime()
-    }).finally(() => {
-        process.exit(1);
-    });
-});
-
-// Graceful shutdown handlers
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
-
-// Bot ready event
-client.on('ready', async () => {
-    try {
+    static async initializeBot(client) {
         // Set bot presence
-        client.user.setPresence({
+        await client.user.setPresence({
             activities: [{
                 name: 'your commands',
-                type: ActivityType.Watching
+                type: 3 // WATCHING
             }],
             status: 'online'
         });
+    }
 
-        const currentTime = getJakartaTime();
+    static async logStartup(client) {
         const totalUsers = client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
+        const currentTime = getJakartaTime();
 
-        // Startup information
+        // Console logs with colors
         console.log('\x1b[36m%s\x1b[0m', '══════════════════════════════════════');
         console.log('\x1b[32m%s\x1b[0m', '✅ Bot is now online!');
         console.log('\x1b[33m%s\x1b[0m', `📡 Connected as: ${client.user.tag}`);
         console.log('\x1b[33m%s\x1b[0m', `👥 Serving: ${client.guilds.cache.size} servers`);
         console.log('\x1b[33m%s\x1b[0m', `👤 Users: ${totalUsers} users`);
         console.log('\x1b[33m%s\x1b[0m', `⌚ Current Time (UTC+7): ${currentTime}`);
-        console.log('\x1b[33m%s\x1b[0m', `🤖 Bot Version: 1.0.0`);
+        console.log('\x1b[33m%s\x1b[0m', `🤖 Bot Version: ${version}`);
         console.log('\x1b[33m%s\x1b[0m', `📋 Commands Loaded: ${client.commands.size}`);
         console.log('\x1b[36m%s\x1b[0m', '══════════════════════════════════════');
 
-// Log startup to logger
-await Logger.log('SYSTEM', {
-    message: [
-        '🚀 Bot has started up successfully!',
-        `📡 Connected as: ${client.user.tag}`,
-        `👥 Servers: ${client.guilds.cache.size}`,
-        `👤 Users: ${totalUsers}`,
-        `📋 Commands: ${client.commands.size}`,
-        `⌚ Startup Time (UTC+7): ${currentTime}`,
-        `👨‍💻 Started by: Catyro`
-    ].join('\n'),
-    userId: client.user.id,
-    timestamp: currentTime
-});
-
-// Log to console
-console.log('\x1b[32m%s\x1b[0m', '✨ All systems operational!');
-
-// Log detailed server information
-client.guilds.cache.forEach(guild => {
-    console.log('\x1b[34m%s\x1b[0m', `📌 Connected to server: ${guild.name} (${guild.id})`);
-    console.log('\x1b[34m%s\x1b[0m', `   ├ Members: ${guild.memberCount}`);
-    console.log('\x1b[34m%s\x1b[0m', `   ├ Channels: ${guild.channels.cache.size}`);
-    console.log('\x1b[34m%s\x1b[0m', `   └ Roles: ${guild.roles.cache.size}`);
-});
-
-console.log('\x1b[36m%s\x1b[0m', '══════════════════════════════════════');
-
-    } catch (error) {
-        console.error('Error in ready event:', error);
-        await Logger.log('ERROR', {
-            type: 'STARTUP_ERROR',
-            error: error.message,
+        // Log to logger system
+        await Logger.log('SYSTEM', {
+            type: 'BOT_STARTUP',
+            message: [
+                '🚀 Bot has started up successfully!',
+                `📡 Connected as: ${client.user.tag}`,
+                `👥 Servers: ${client.guilds.cache.size}`,
+                `👤 Users: ${totalUsers}`,
+                `📋 Commands: ${client.commands.size}`,
+                `⌚ Startup Time (UTC+7): ${currentTime}`,
+                `👨‍💻 Started by: Catyro`,
+                `🤖 Version: ${version}`
+            ].join('\n'),
+            userId: client.user.id,
             timestamp: currentTime
         });
-    }
-});
 
-// Bot initialization
-const initializeBot = async () => {
-    try {
-        validateConfig();
-        console.log('🔄 Loading commands and events...');
-        ensureDirectory(path.join(__dirname, 'commands'));
-        ensureDirectory(path.join(__dirname, 'events'));
-        await loadAndDeployCommands(); // Menggunakan fungsi yang sudah didefinisikan
-        await loadEvents();
-        await client.login(config.DISCORD_TOKEN);
-    } catch (error) {
-        console.error('❌ Error initializing bot:', error);
-        process.exit(1);
+        // Log detailed server information
+        client.guilds.cache.forEach(async guild => {
+            console.log('\x1b[34m%s\x1b[0m', `📌 Connected to server: ${guild.name} (${guild.id})`);
+            console.log('\x1b[34m%s\x1b[0m', `   ├ Members: ${guild.memberCount}`);
+            console.log('\x1b[34m%s\x1b[0m', `   ├ Channels: ${guild.channels.cache.size}`);
+            console.log('\x1b[34m%s\x1b[0m', `   └ Roles: ${guild.roles.cache.size}`);
+
+            await Logger.log('SYSTEM', {
+                type: 'GUILD_INFO',
+                guildId: guild.id,
+                guildName: guild.name,
+                members: guild.memberCount,
+                channels: guild.channels.cache.size,
+                roles: guild.roles.cache.size,
+                timestamp: currentTime
+            });
+        });
+
+        console.log('\x1b[32m%s\x1b[0m', '✨ All systems operational!');
+    }
+
+    static async startPeriodicTasks(client) {
+        // Check for expired boosts every hour
+        setInterval(async () => {
+            try {
+                await this.checkExpiredBoosts(client);
+            } catch (error) {
+                console.error('Error checking expired boosts:', error);
+                await Logger.log('ERROR', {
+                    type: 'BOOST_CHECK',
+                    error: error.message,
+                    timestamp: getJakartaTime()
+                });
+            }
+        }, 60 * 60 * 1000); // Every hour
+
+        // Cleanup old logs every day
+        setInterval(async () => {
+            try {
+                await Logger.rotateLogFiles();
+            } catch (error) {
+                console.error('Error rotating logs:', error);
+                await Logger.log('ERROR', {
+                    type: 'LOG_ROTATION',
+                    error: error.message,
+                    timestamp: getJakartaTime()
+                });
+            }
+        }, 24 * 60 * 60 * 1000); // Every 24 hours
+    }
+
+    static async checkExpiredBoosts(client) {
+        const guilds = client.guilds.cache;
+        for (const [, guild] of guilds) {
+            try {
+                const members = await guild.members.fetch();
+                
+                for (const [, member] of members) {
+                    // Skip if member is still boosting
+                    if (member.premiumSince) continue;
+
+                    // Check for expired custom roles
+                    const userRoles = await RoleManager.getUserRoles(member.id);
+                    if (!userRoles.length) continue;
+
+                    // Process expired roles
+                    for (const roleData of userRoles) {
+                        try {
+                            const role = guild.roles.cache.get(roleData.roleId);
+                            if (!role) continue;
+
+                            // Remove role from target
+                            const targetMember = await guild.members.fetch(roleData.targetId);
+                            if (targetMember) {
+                                await targetMember.roles.remove(role);
+                            }
+
+                            // Delete the role
+                            await role.delete('Boost expired - Automatic cleanup');
+
+                            // Log role deletion
+                            await Logger.log('ROLE_DELETE', {
+                                type: 'BOOST_EXPIRED',
+                                userId: member.id,
+                                roleId: role.id,
+                                guildId: guild.id,
+                                timestamp: getJakartaTime()
+                            });
+                        } catch (error) {
+                            console.error(`Error processing expired role ${roleData.roleId}:`, error);
+                        }
+                    }
+
+                    // Clear user's custom roles from database
+                    await RoleManager.clearUserRoles(member.id);
+
+                    // Notify user about expired roles
+                    try {
+                        await member.send({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setColor(0xe74c3c)
+                                    .setTitle('❌ Custom Roles Expired')
+                                    .setDescription(
+                                        'Your custom roles have been removed because your server boost has expired.\n' +
+                                        'Boost the server again to create new custom roles!'
+                                    )
+                                    .setTimestamp()
+                            ]
+                        });
+                    } catch (error) {
+                        console.error(`Error sending expiration notification to ${member.id}:`, error);
+                    }
+                }
+            } catch (error) {
+                console.error(`Error checking boosts in guild ${guild.id}:`, error);
+                await Logger.log('ERROR', {
+                    type: 'BOOST_CHECK',
+                    guildId: guild.id,
+                    error: error.message,
+                    timestamp: getJakartaTime()
+                });
+            }
+        }
+    }
+}
+
+module.exports = {
+    name: Events.ClientReady,
+    once: true,
+    async execute(client) {
+        await ReadyHandler.handle(client);
     }
 };
-
-// Start the bot
-initializeBot().catch(error => {
-    console.error('Failed to initialize bot:', error);
-    process.exit(1);
-});
