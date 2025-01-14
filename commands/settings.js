@@ -9,10 +9,10 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
     async execute(interaction) {
-        // Dapatkan waktu dalam format "Today at HH:mm"
+        // Format waktu hanya dalam 12-hour format (PM/AM)
         const timeString = moment()
             .tz('Asia/Jakarta')
-            .format('HH:mm');
+            .format('h:mm A'); // Ini akan menghasilkan format seperti "11:09 PM"
 
         // Create main settings embed
         const embed = new EmbedBuilder()
@@ -28,7 +28,7 @@ module.exports = {
                 '',
                 '*Note: Some options require specific permissions.*'
             ].join('\n'))
-            .setTimestamp()
+            // Hapus .setTimestamp() karena ini menyebabkan timestamp tambahan
             .setFooter({ 
                 text: `Today at ${timeString}`,
                 iconURL: interaction.client.user.displayAvatarURL()
