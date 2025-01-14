@@ -1,9 +1,9 @@
-const { Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { Events, ButtonBuilder, ActionRowBuilder } = require('discord.js');
+const EmbedService = require('/home/container/utils/embed-builder');
 const RoleManager = require('/home/container/utils/role-manager');
 const Logger = require('/home/container/utils/logger');
-const EmbedService = require('/home/container/utils/embed-builder');
-const Config = require('/home/container/config');
 const Validator = require('/home/container/utils/validator');
+const config = require('/home/container/config');
 
 class ButtonInteractionHandler {
     static async handle(interaction) {
