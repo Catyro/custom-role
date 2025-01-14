@@ -1,52 +1,88 @@
 const { EmbedBuilder } = require('discord.js');
 const config = require('../config');
 
-const Colors = {
-    SUCCESS: '#00FF00',
-    ERROR: '#FF0000',
-    INFO: '#0099FF',
-    WARNING: '#FFD700'
-};
-
 class EmbedService {
-    static success(title, description) {
-        return new EmbedBuilder()
-            .setColor(Colors.SUCCESS)
-            .setTitle(title)
-            .setDescription(description)
-            .setTimestamp();
+    /**
+     * Creates a standardized embed with optional parameters
+     * @param {Object} options Embed options
+     * @param {string} options.title Embed title
+     * @param {string} options.description Embed description
+     * @param {string} options.color Embed color (hex)
+     * @param {Array} options.fields Array of fields
+     * @param {Object} options.footer Footer object
+     * @param {boolean} options.timestamp Include timestamp
+     * @returns {EmbedBuilder}
+     */
+    static createEmbed({
+        title = '',
+        description = '',
+        color = config.EMBED_COLORS.DEFAULT,
+        fields = [],
+        footer = null,
+        timestamp = false
+    }) {
+        const embed = new EmbedBuilder()
+            .setColor(color);
+
+        if (title) embed.setTitle(title);
+        if (description) embed.setDescription(description);
+        if (fields.length > 0) embed.addFields(fields);
+        if (footer) embed.setFooter(footer);
+        if (timestamp) embed.setTimestamp();
+
+        return embed;
     }
 
-    static error(title, description) {
-        return new EmbedBuilder()
-            .setColor(Colors.ERROR)
-            .setTitle(title)
-            .setDescription(description)
-            .setTimestamp();
+    /**
+     * Creates a success embed
+     * @param {string} message Success message
+     * @returns {EmbedBuilder}
+     */
+    static success(message) {
+        return this.createEmbed({
+            title: '✅ Success',
+            description: message,
+            color: config.EMBED_COLORS.SUCCESS
+        });
     }
 
-    static info(title, description) {
-        return new EmbedBuilder()
-            .setColor(Colors.INFO)
-            .setTitle(title)
-            .setDescription(description)
-            .setTimestamp();
+    /**
+     * Creates an error embed
+     * @param {string} message Error message
+     * @returns {EmbedBuilder}
+     */
+    static error(message) {
+        return this.createEmbed({
+            title: '❌ Error',
+            description: message,
+            color: config.EMBED_COLORS.ERROR
+        });
     }
 
-    static warning(title, description) {
-        return new EmbedBuilder()
-            .setColor(Colors.WARNING)
-            .setTitle(title)
-            .setDescription(description)
-            .setTimestamp();
+    /**
+     * Creates a warning embed
+     * @param {string} message Warning message
+     * @returns {EmbedBuilder}
+     */
+    static warning(message) {
+        return this.createEmbed({
+            title: '⚠️ Warning',
+            description: message,
+            color: config.EMBED_COLORS.WARNING
+        });
     }
 
-    static customRole(boostCount, opportunities) {
-        return new EmbedBuilder()
-            .setColor(Colors.INFO)
-            .setTitle('Terimakasih sudah boost server kami!')
-            .setDescription(`Kamu mempunyai ${opportunities} Kesempatan Custom role`)
-            .setTimestamp();
+    /**
+     * Creates an info embed
+     * @param {string} message Info message
+     * @returns {EmbedBuilder}
+     */
+    static info(message) {
+        return this.createEmbed({
+            title: 'ℹ️ Information',
+            description: message,
+            color: config.EMBED_COLORS.INFO
+        });
     }
 }
 

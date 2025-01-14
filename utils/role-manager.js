@@ -1,212 +1,168 @@
-const { Collection } = require('discord.js');
-const fs = require('fs-extra');
+const fs = require('fs').promises;
 const path = require('path');
-const Logger = require('./logger');
 const moment = require('moment-timezone');
+const Logger = require('./logger');
+const config = require('../config');
 
 class RoleManager {
-    static db = new Map();
-    static dataPath = path.join(__dirname, '../data/roles.json');
-    static activeMessages = new Collection();
-    static cooldowns = new Map();
-    static ROLE_LIMITS = {
-        MAX_ROLES_PER_USER: 3,
-        MAX_NAME_LENGTH: 100,
-        MAX_ROLES_PER_GUILD: 250
-    };
-    static COOLDOWNS = {
-        'create-role': 300000, // 5 minutes
-        'edit-role': 60000,    // 1 minute
-        'delete-role': 60000,  // 1 minute
-        'default': 3000        // 3 seconds
-    };
-
-    static async init() {
+    static async getRoleData(roleId) {
         try {
-            await fs.ensureDir(path.dirname(this.dataPath));
+            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
+            const fileContent = await fs.readFile(rolesPath, 'utf8');
+            const roles = JSON.parse(fileContent);
             
-            if (await fs.pathExists(this.dataPath)) {
-                const data = await fs.readJson(this.dataPath);
-                Object.entries(data).forEach(([key, value]) => {
-                    this.db.set(key, value);
-                });
-            } else {
-                await this.saveData();
+            return roles.find(role => role.roleId === roleId);
+        } catch (error) {
+            console.error('Error getting role data:', error);
+            return null;
+        }
+    }
+
+    static async saveRole(roleData) {
+        try {
+            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
+            let roles = [];
+
+            try {
+                const fileContent = await fs.readFile(rolesPath, 'utf8');
+                roles = JSON.parse(fileContent);
+            } catch {
+                // If file doesn't exist, start with empty array
             }
 
-            await this.cleanupTempData();
-            await Logger.log('INFO', {
-                type: 'ROLE_MANAGER_INIT',
-                message: 'RoleManager initialized successfully'
+            // Add new role
+            roles.push({
+                ...roleData,
+                createdAt: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
+
+            await fs.writeFile(rolesPath, JSON.stringify(roles, null, 2));
+
+            await Logger.log('ROLE', {
+                type: 'ROLE_SAVE',
+                roleId: roleData.roleId,
+                userId: roleData.creatorId,
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            });
+
             return true;
         } catch (error) {
-            await Logger.log('ERROR', {
-                type: 'ROLE_MANAGER_INIT',
-                error: error.message
-            });
+            console.error('Error saving role:', error);
             return false;
         }
     }
 
-    static async saveData() {
+    static async updateRole(roleId, updates) {
         try {
-            const data = Object.fromEntries(this.db);
-            await fs.writeJson(this.dataPath, data, { spaces: 2 });
-            return true;
-        } catch (error) {
-            await Logger.log('ERROR', {
-                type: 'ROLE_MANAGER_SAVE',
-                error: error.message
-            });
-            return false;
-        }
-    }
+            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
+            const fileContent = await fs.readFile(rolesPath, 'utf8');
+            let roles = JSON.parse(fileContent);
 
-    static async createCustomRole(guildId, creatorId, targetId, roleInfo) {
-        try {
-            const key = `roles_${guildId}`;
-            const roles = this.db.get(key) || [];
-            
-            // Validate role limits
-            if (roles.filter(r => r.creatorId === creatorId).length >= this.ROLE_LIMITS.MAX_ROLES_PER_USER) {
-                throw new Error(`Anda telah mencapai batas maksimum pembuatan custom role (${this.ROLE_LIMITS.MAX_ROLES_PER_USER})`);
-            }
+            const roleIndex = roles.findIndex(role => role.roleId === roleId);
+            if (roleIndex === -1) return false;
 
-            if (roles.length >= this.ROLE_LIMITS.MAX_ROLES_PER_GUILD) {
-                throw new Error('Server telah mencapai batas maksimum custom role');
-            }
-
-            // Validate role name
-            if (!roleInfo.name || roleInfo.name.length > this.ROLE_LIMITS.MAX_NAME_LENGTH) {
-                throw new Error(`Nama role harus antara 1-${this.ROLE_LIMITS.MAX_NAME_LENGTH} karakter`);
-            }
-
-            const newRole = {
-                ...roleInfo,
-                id: `${guildId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                creatorId,
-                targetId,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+            roles[roleIndex] = {
+                ...roles[roleIndex],
+                ...updates,
+                updatedAt: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             };
 
-            roles.push(newRole);
-            this.db.set(key, roles);
-            await this.saveData();
+            await fs.writeFile(rolesPath, JSON.stringify(roles, null, 2));
 
-            await Logger.log('INFO', {
-                type: 'ROLE_CREATED',
-                guildId,
-                creatorId,
-                roleId: newRole.id
+            await Logger.log('ROLE', {
+                type: 'ROLE_UPDATE',
+                roleId,
+                updates,
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
 
-            return newRole;
+            return true;
         } catch (error) {
-            await Logger.log('ERROR', {
-                type: 'ROLE_CREATE_FAILED',
-                guildId,
-                creatorId,
-                error: error.message
-            });
-            throw error;
+            console.error('Error updating role:', error);
+            return false;
         }
     }
 
-    static async checkCooldown(userId, action) {
+    static async deleteRole(roleId) {
         try {
-            if (!this.cooldowns.has(action)) {
-                this.cooldowns.set(action, new Collection());
-            }
+            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
+            const fileContent = await fs.readFile(rolesPath, 'utf8');
+            let roles = JSON.parse(fileContent);
 
-            const now = Date.now();
-            const timestamps = this.cooldowns.get(action);
-            const cooldownAmount = this.COOLDOWNS[action] || this.COOLDOWNS.default;
+            roles = roles.filter(role => role.roleId !== roleId);
 
-            // Cleanup old cooldowns
-            this.cleanupOldCooldowns(timestamps);
+            await fs.writeFile(rolesPath, JSON.stringify(roles, null, 2));
 
-            if (timestamps.has(userId)) {
-                const expirationTime = timestamps.get(userId) + cooldownAmount;
-                if (now < expirationTime) {
-                    return Math.round((expirationTime - now) / 1000);
-                }
-            }
+            await Logger.log('ROLE', {
+                type: 'ROLE_DELETE',
+                roleId,
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            });
 
-            timestamps.set(userId, now);
-            setTimeout(() => timestamps.delete(userId), cooldownAmount);
-            return 0;
+            return true;
         } catch (error) {
-            await Logger.log('ERROR', {
-                type: 'COOLDOWN_CHECK_FAILED',
+            console.error('Error deleting role:', error);
+            return false;
+        }
+    }
+
+    static async getUserRoles(userId) {
+        try {
+            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
+            const fileContent = await fs.readFile(rolesPath, 'utf8');
+            const roles = JSON.parse(fileContent);
+
+            return roles.filter(role => role.creatorId === userId);
+        } catch (error) {
+            console.error('Error getting user roles:', error);
+            return [];
+        }
+    }
+
+    static async clearUserRoles(userId) {
+        try {
+            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
+            const fileContent = await fs.readFile(rolesPath, 'utf8');
+            let roles = JSON.parse(fileContent);
+
+            roles = roles.filter(role => role.creatorId !== userId);
+
+            await fs.writeFile(rolesPath, JSON.stringify(roles, null, 2));
+
+            await Logger.log('ROLE', {
+                type: 'ROLES_CLEARED',
                 userId,
-                action,
-                error: error.message
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
-            return 0; // Default to no cooldown on error
+
+            return true;
+        } catch (error) {
+            console.error('Error clearing user roles:', error);
+            return false;
         }
     }
 
-    static async cleanupTempData() {
-        try {
-            const now = Date.now();
-            let cleanupCount = 0;
-
-            for (const [key, value] of this.db.entries()) {
-                if (key.startsWith('temp_role_') || key.startsWith('test_mode_')) {
-                    const timestamp = new Date(value.timestamp).getTime();
-                    if (now - timestamp > 300000) { // 5 minutes
-                        this.db.delete(key);
-                        cleanupCount++;
-                    }
-                }
-            }
-
-            if (cleanupCount > 0) {
-                await this.saveData();
-                await Logger.log('INFO', {
-                    type: 'TEMP_DATA_CLEANUP',
-                    itemsCleaned: cleanupCount
-                });
-            }
-        } catch (error) {
-            await Logger.log('ERROR', {
-                type: 'CLEANUP_FAILED',
-                error: error.message
-            });
-        }
+    // Validation methods
+    static isValidRoleName(name) {
+        return name.length >= 2 && name.length <= config.ROLE_LIMITS.MAX_NAME_LENGTH;
     }
 
-    static cleanupOldCooldowns(timestamps) {
-        const now = Date.now();
-        let cleaned = 0;
-        timestamps.forEach((timestamp, userId) => {
-            if (now - timestamp > 3600000) { // 1 hour
-                timestamps.delete(userId);
-                cleaned++;
-            }
-        });
-        return cleaned;
+    static isValidHexColor(color) {
+        return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color);
     }
 
-    static async getRoleStats(guildId) {
+    static async isValidImageUrl(url) {
         try {
-            const roles = await this.getAllCustomRoles(guildId);
-            return {
-                total: roles.length,
-                activeUsers: new Set(roles.map(r => r.creatorId)).size,
-                recentlyCreated: roles.filter(r => 
-                    Date.now() - new Date(r.createdAt).getTime() < 86400000 // 24 hours
-                ).length
-            };
-        } catch (error) {
-            await Logger.log('ERROR', {
-                type: 'ROLE_STATS_FAILED',
-                guildId,
-                error: error.message
-            });
-            return { total: 0, activeUsers: 0, recentlyCreated: 0 };
+            const response = await fetch(url);
+            const contentType = response.headers.get('content-type');
+            const contentLength = response.headers.get('content-length');
+
+            return (
+                contentType.startsWith('image/') &&
+                parseInt(contentLength) <= config.ROLE_LIMITS.MAX_ICON_SIZE
+            );
+        } catch {
+            return false;
         }
     }
 }

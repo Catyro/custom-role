@@ -1,192 +1,128 @@
-const { 
-    Events, 
-    EmbedBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle 
-} = require('discord.js');
+const { Events } = require('discord.js');
 const EmbedService = require('../utils/embed-builder');
 const RoleManager = require('../utils/role-manager');
 const Logger = require('../utils/logger');
 const Validator = require('../utils/validator');
-
-class ModalSubmitHandler {
-    static async handle(interaction) {
-        if (!interaction.isModalSubmit()) return;
-
-        try {
-            const handler = this.getHandler(interaction.customId);
-            if (handler) {
-                await handler(interaction);
-            } else {
-                console.warn(`Unknown modal submission: ${interaction.customId}`);
-                await this.handleError(interaction, 'Modal tidak dikenal.');
-            }
-        } catch (error) {
-            await Logger.log('ERROR', {
-                type: 'MODAL_SUBMIT',
-                modalId: interaction.customId,
-                userId: interaction.user.id,
-                error: error.message,
-                stack: error.stack
-            });
-            await this.handleError(interaction, 'Terjadi kesalahan saat memproses modal.');
-        }
-    }
-
-    static getHandler(modalId) {
-        const handlers = {
-            'custom_role_modal': this.handleCustomRoleModal
-        };
-        return handlers[modalId];
-    }
-
-    static async handleCustomRoleModal(interaction) {
-        try {
-            await interaction.deferReply({ ephemeral: true });
-
-            // Verify user is eligible
-            if (!interaction.member.premiumSince && !await RoleManager.isInTestMode(interaction.user.id)) {
-                return await interaction.editReply({
-                    embeds: [EmbedService.error(
-                        'Akses Ditolak',
-                        'Anda harus menjadi booster untuk membuat custom role!'
-                    )]
-                });
-            }
-
-            // Get and validate inputs
-            const roleName = interaction.fields.getTextInputValue('roleName').trim();
-            const roleColor = interaction.fields.getTextInputValue('roleColor').trim();
-            const roleIcon = interaction.fields.getTextInputValue('roleIcon')?.trim() || null;
-
-            // Validate name
-            if (!Validator.isValidRoleName(roleName)) {
-                return await interaction.editReply({
-                    embeds: [EmbedService.error(
-                        'Nama Tidak Valid',
-                        'Nama role harus antara 1-100 karakter dan tidak mengandung karakter terlarang.'
-                    )]
-                });
-            }
-
-            // Validate color
-            if (!Validator.isValidHexColor(roleColor)) {
-                return await interaction.editReply({
-                    embeds: [EmbedService.error(
-                        'Warna Tidak Valid',
-                        'Warna harus dalam format HEX (contoh: #FF0000)'
-                    )]
-                });
-            }
-
-            // Validate icon if provided
-            if (roleIcon && !await Validator.isValidImageUrl(roleIcon)) {
-                return await interaction.editReply({
-                    embeds: [EmbedService.error(
-                        'Icon Tidak Valid',
-                        'URL icon tidak valid atau ukuran/format tidak sesuai.\nFormat yang didukung: PNG/JPG, Max: 256KB'
-                    )]
-                });
-            }
-
-            // Store role data temporarily
-            const roleData = {
-                name: roleName,
-                color: roleColor,
-                iconUrl: roleIcon,
-                targetId: interaction.user.id, // Default to self
-                timestamp: new Date().toISOString()
-            };
-
-            await RoleManager.setTempRoleData(interaction.user.id, roleData);
-
-            // Create preview embed
-            const previewEmbed = new EmbedBuilder()
-                .setColor(roleColor)
-                .setTitle('🎨 Preview Custom Role')
-                .addFields(
-                    { name: 'Nama', value: roleName, inline: true },
-                    { name: 'Warna', value: roleColor, inline: true },
-                    { name: 'Icon', value: roleIcon ? '✅ Tersedia' : '❌ Tidak ada', inline: true },
-                    { name: 'Target', value: `<@${roleData.targetId}>`, inline: true }
-                )
-                .setFooter({ 
-                    text: `Requested by ${interaction.user.tag}`,
-                    iconURL: interaction.user.displayAvatarURL()
-                });
-
-            if (roleIcon) {
-                previewEmbed.setThumbnail(roleIcon);
-            }
-
-            // Create action buttons
-            const row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('confirm_role')
-                        .setLabel('Konfirmasi')
-                        .setStyle(ButtonStyle.Success)
-                        .setEmoji('✅'),
-                    new ButtonBuilder()
-                        .setCustomId('test_role')
-                        .setLabel('Test (5m)')
-                        .setStyle(ButtonStyle.Primary)
-                        .setEmoji('🧪'),
-                    new ButtonBuilder()
-                        .setCustomId('cancel_role')
-                        .setLabel('Batal')
-                        .setStyle(ButtonStyle.Danger)
-                        .setEmoji('❌')
-                );
-
-            // Log modal submission
-            await Logger.log('MODAL_SUBMIT', {
-                type: 'CUSTOM_ROLE_MODAL',
-                userId: interaction.user.id,
-                roleDetails: {
-                    name: roleName,
-                    hasIcon: !!roleIcon
-                }
-            });
-
-            // Send preview
-            await interaction.editReply({
-                embeds: [previewEmbed],
-                components: [row]
-            });
-
-        } catch (error) {
-            await this.handleError(interaction, error);
-        }
-    }
-
-    static async handleError(interaction, error) {
-        const errorMessage = error instanceof Error ? error.message : error;
-        
-        await Logger.log('ERROR', {
-            type: 'MODAL_SUBMIT',
-            modalId: interaction.customId,
-            userId: interaction.user.id,
-            error: errorMessage
-        });
-
-        const errorEmbed = EmbedService.error(
-            'Error',
-            'Terjadi kesalahan saat memproses form. Silakan coba lagi nanti.'
-        );
-
-        if (interaction.deferred) {
-            await interaction.editReply({ embeds: [errorEmbed] });
-        } else {
-            await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-        }
-    }
-}
+const config = require('../config');
+const moment = require('moment-timezone');
 
 module.exports = {
     name: Events.InteractionCreate,
     async execute(interaction) {
-        await ModalSubmitHandler.handle(interaction);
+        if (!interaction.isModalSubmit()) return;
+
+        try {
+            const [action, type, roleId] = interaction.customId.split('_');
+
+            switch(action) {
+                case 'edit':
+                    if (type === 'role') {
+                        await handleRoleEdit(interaction, roleId);
+                    }
+                    break;
+                default:
+                    await interaction.reply({
+                        content: '❌ Invalid modal action!',
+                        ephemeral: true
+                    });
+            }
+        } catch (error) {
+            console.error('Modal submit error:', error);
+            await Logger.log('ERROR', {
+                type: 'MODAL_SUBMIT',
+                error: error.message,
+                userId: interaction.user.id,
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            });
+
+            await interaction.reply({
+                content: '❌ An error occurred while processing your request.',
+                ephemeral: true
+            });
+        }
     }
 };
+
+async function handleRoleEdit(interaction, roleId) {
+    await interaction.deferReply({ ephemeral: true });
+
+    const role = await interaction.guild.roles.fetch(roleId);
+    if (!role) {
+        return await interaction.editReply({
+            content: '❌ Role not found!',
+            ephemeral: true
+        });
+    }
+
+    const newName = interaction.fields.getTextInputValue('name');
+    const newColor = interaction.fields.getTextInputValue('color');
+    const newIcon = interaction.fields.getTextInputValue('icon') || null;
+
+    // Validate inputs
+    if (!Validator.isValidRoleName(newName)) {
+        return await interaction.editReply({
+            content: '❌ Invalid role name! Name must be between 2 and 100 characters.',
+            ephemeral: true
+        });
+    }
+
+    if (!Validator.isValidHexColor(newColor)) {
+        return await interaction.editReply({
+            content: '❌ Invalid color! Please use a valid hex color code (e.g., #FF0000).',
+            ephemeral: true
+        });
+    }
+
+    if (newIcon && !Validator.isValidImageUrl(newIcon)) {
+        return await interaction.editReply({
+            content: '❌ Invalid icon URL! Please provide a valid image URL.',
+            ephemeral: true
+        });
+    }
+
+    try {
+        // Update role
+        await role.edit({
+            name: newName,
+            color: newColor,
+            icon: newIcon ? await Validator.getImageBuffer(newIcon) : null
+        });
+
+        // Log the change
+        await Logger.log('ROLE_EDIT', {
+            type: 'ROLE_UPDATE',
+            userId: interaction.user.id,
+            roleId: role.id,
+            changes: {
+                name: newName,
+                color: newColor,
+                icon: newIcon
+            },
+            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+        });
+
+        // Update role in database
+        await RoleManager.updateRole(roleId, {
+            name: newName,
+            color: newColor,
+            icon: newIcon
+        });
+
+        await interaction.editReply({
+            embeds: [
+                EmbedService.createEmbed({
+                    title: '✅ Role Updated',
+                    description: `The role has been successfully updated!\n\n**New Name:** ${newName}\n**New Color:** ${newColor}`,
+                    color: config.EMBED_COLORS.SUCCESS
+                })
+            ],
+            ephemeral: true
+        });
+    } catch (error) {
+        console.error('Error updating role:', error);
+        await interaction.editReply({
+            content: '❌ Failed to update role. Please try again later.',
+            ephemeral: true
+        });
+    }
+}
