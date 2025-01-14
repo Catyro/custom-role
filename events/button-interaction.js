@@ -1,10 +1,20 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const Logger = require('../utils/logger');
+const moment = require('moment-timezone');
 
-const CURRENT_TIME = '2025-01-14 11:59:34';
-const CURRENT_USER = 'Catyro';
+// Helper function untuk mendapatkan waktu Jakarta
+function getJakartaTime() {
+    return moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+}
 
-// Utility functions for creating buttons
+// Helper function untuk format footer
+function getFooterText(interaction) {
+    const jakartaTime = getJakartaTime();
+    const totalRoles = interaction.guild?.roles.cache.size || 0;
+    return `Total Roles: ${totalRoles} | ${jakartaTime} (UTC+7) | Catyro`;
+}
+
+// Utility functions untuk membuat buttons
 function createCloseButton() {
     return new ButtonBuilder()
         .setCustomId('close_menu')
@@ -26,8 +36,8 @@ async function handleListRoles(interaction, page = 0) {
         const roles = interaction.guild.roles.cache
             .sort((a, b) => b.position - a.position)
             .map(role => {
-                const color = role.color === 0 ? '#000000' : `#${role.color.toString(16).padStart(6, '0')}`;
-                return `<@&${role.id}>\n> Members: **${role.members.size}**\n> Color: \`${color}\``;
+                const memberCount = role.members.size;
+                return `${role} (**${memberCount}** members)`;
             });
 
         // Split roles into chunks of 15 to stay within embed limits
@@ -45,7 +55,7 @@ async function handleListRoles(interaction, page = 0) {
                         .setTitle('❌ No Roles')
                         .setDescription('No roles found in this server.')
                         .setFooter({ 
-                            text: `Current Time (UTC): ${CURRENT_TIME} | ${CURRENT_USER}`,
+                            text: getFooterText(interaction),
                             iconURL: interaction.client.user.displayAvatarURL()
                         })
                 ],
@@ -59,9 +69,9 @@ async function handleListRoles(interaction, page = 0) {
         const embed = new EmbedBuilder()
             .setColor(0x3498db)
             .setTitle(`📋 Roles List (Page ${page + 1}/${chunks.length})`)
-            .setDescription(chunks[page].join('\n\n'))
+            .setDescription(chunks[page].join('\n'))
             .setFooter({ 
-                text: `Total Roles: ${roles.length} | Current Time (UTC): ${CURRENT_TIME} | ${CURRENT_USER}`,
+                text: getFooterText(interaction),
                 iconURL: interaction.client.user.displayAvatarURL()
             });
 
@@ -105,7 +115,7 @@ async function handleListRoles(interaction, page = 0) {
                     .setTitle('❌ Error')
                     .setDescription('Terjadi kesalahan saat mengambil daftar role.')
                     .setFooter({ 
-                        text: `Current Time (UTC): ${CURRENT_TIME} | ${CURRENT_USER}`,
+                        text: getFooterText(interaction),
                         iconURL: interaction.client.user.displayAvatarURL()
                     })
             ],
@@ -123,7 +133,7 @@ async function handleSetLogChannel(interaction) {
                     .setTitle('❌ Akses Ditolak')
                     .setDescription('Anda tidak memiliki izin untuk mengatur log channel.')
                     .setFooter({ 
-                        text: `Current Time (UTC): ${CURRENT_TIME} | ${CURRENT_USER}`,
+                        text: getFooterText(interaction),
                         iconURL: interaction.client.user.displayAvatarURL()
                     })
             ],
@@ -147,7 +157,7 @@ async function handleSetLogChannel(interaction) {
             '⏰ Waktu: 30 detik'
         ].join('\n'))
         .setFooter({ 
-            text: `Current Time (UTC): ${CURRENT_TIME} | ${CURRENT_USER}`,
+            text: getFooterText(interaction),
             iconURL: interaction.client.user.displayAvatarURL()
         });
 
@@ -177,7 +187,7 @@ async function handleSetLogChannel(interaction) {
                     .setTitle('✅ Log Channel Set')
                     .setDescription(`Channel log telah diatur ke ${message.content}`)
                     .setFooter({ 
-                        text: `Current Time (UTC): ${CURRENT_TIME} | ${CURRENT_USER}`,
+                        text: getFooterText(interaction),
                         iconURL: interaction.client.user.displayAvatarURL()
                     });
 
@@ -190,7 +200,7 @@ async function handleSetLogChannel(interaction) {
                 await Logger.log('LOG_CHANNEL_SET', {
                     channelId: message.content.replace(/[<#>]/g, ''),
                     userId: interaction.user.id,
-                    timestamp: CURRENT_TIME
+                    timestamp: getJakartaTime()
                 });
             } else {
                 throw new Error('Failed to set log channel');
@@ -202,7 +212,7 @@ async function handleSetLogChannel(interaction) {
                 .setTitle('❌ Error')
                 .setDescription('Terjadi kesalahan saat mengatur log channel.\nPastikan channel valid dan bot memiliki akses.')
                 .setFooter({ 
-                    text: `Current Time (UTC): ${CURRENT_TIME} | ${CURRENT_USER}`,
+                    text: getFooterText(interaction),
                     iconURL: interaction.client.user.displayAvatarURL()
                 });
 
@@ -220,7 +230,7 @@ async function handleSetLogChannel(interaction) {
                 .setTitle('⏰ Waktu Habis')
                 .setDescription('Waktu pengaturan log channel telah habis.\nSilakan coba lagi.')
                 .setFooter({ 
-                    text: `Current Time (UTC): ${CURRENT_TIME} | ${CURRENT_USER}`,
+                    text: getFooterText(interaction),
                     iconURL: interaction.client.user.displayAvatarURL()
                 });
 
@@ -240,7 +250,7 @@ async function handleViewLogs(interaction) {
             .setTitle('📋 Recent Logs')
             .setDescription(logs || '*No logs available.*')
             .setFooter({ 
-                text: `Current Time (UTC): ${CURRENT_TIME} | ${CURRENT_USER}`,
+                text: getFooterText(interaction),
                 iconURL: interaction.client.user.displayAvatarURL()
             });
 
@@ -265,7 +275,7 @@ async function handleViewLogs(interaction) {
                     .setTitle('❌ Error')
                     .setDescription('Error retrieving logs.')
                     .setFooter({ 
-                        text: `Current Time (UTC): ${CURRENT_TIME} | ${CURRENT_USER}`,
+                        text: getFooterText(interaction),
                         iconURL: interaction.client.user.displayAvatarURL()
                     })
             ],
@@ -281,7 +291,7 @@ async function handleBack(interaction) {
             .setTitle('⚙️ Bot Settings')
             .setDescription('Please select an option below:')
             .setFooter({ 
-                text: `Current Time (UTC): ${CURRENT_TIME} | ${CURRENT_USER}`,
+                text: getFooterText(interaction),
                 iconURL: interaction.client.user.displayAvatarURL()
             });
 
@@ -317,11 +327,26 @@ async function handleBack(interaction) {
 
 async function handleCloseMenu(interaction) {
     try {
+        // Cek apakah bot memiliki izin untuk menghapus pesan
+        const botMember = interaction.guild.members.me;
+        if (!botMember.permissions.has(PermissionFlagsBits.ManageMessages)) {
+            // Jika tidak punya izin, update pesan saja
+            return await interaction.update({
+                components: [],
+                embeds: [
+                    new EmbedBuilder()
+                        .setDescription('Menu telah ditutup.')
+                        .setColor(0x2f3136)
+                ]
+            });
+        }
+        
+        // Jika punya izin, coba hapus pesan
         await interaction.message.delete();
     } catch (error) {
-        console.error('Error deleting message:', error);
+        console.error('Error in handleCloseMenu:', error);
         await interaction.reply({
-            content: 'Failed to close menu.',
+            content: 'Menu telah ditutup.',
             ephemeral: true
         });
     }
@@ -332,8 +357,7 @@ module.exports = {
     async execute(interaction) {
         if (!interaction.isButton()) return;
 
-        const currentTime = '2025-01-14 12:02:09';
-        const currentUser = 'Catyro';
+        const currentTime = moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
 
         try {
             if (interaction.customId.startsWith('list_roles_')) {
@@ -369,7 +393,7 @@ module.exports = {
                         .setDescription('Unknown button interaction.')
                         .setTimestamp()
                         .setFooter({ 
-                            text: `Current Time (UTC): ${currentTime} | ${currentUser}`,
+                            text: getFooterText(interaction),
                             iconURL: interaction.client.user.displayAvatarURL()
                         });
 
@@ -387,7 +411,7 @@ module.exports = {
                     .setDescription('Terjadi kesalahan saat memproses permintaan.')
                     .setTimestamp()
                     .setFooter({ 
-                        text: `Current Time (UTC): ${currentTime} | ${currentUser}`,
+                        text: getFooterText(interaction),
                         iconURL: interaction.client.user.displayAvatarURL()
                     });
 
@@ -410,7 +434,6 @@ module.exports = {
 
         // Log the button interaction
         try {
-            const Logger = require('../utils/logger');
             await Logger.log('BUTTON_INTERACTION', {
                 buttonId: interaction.customId,
                 userId: interaction.user.id,
@@ -424,3 +447,9 @@ module.exports = {
         }
     }
 };
+
+function getFooterText(interaction) {
+    const jakartaTime = moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+    const totalRoles = interaction.guild.roles.cache.size;
+    return `${totalRoles} Roles | ${jakartaTime} (UTC+7) | ${interaction.user.tag}`;
+}
