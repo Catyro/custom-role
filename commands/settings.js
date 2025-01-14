@@ -2,6 +2,14 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder
 const Logger = require('../utils/logger');
 const moment = require('moment-timezone');
 
+// Fungsi untuk format footer yang konsisten
+function getFooterText(interaction) {
+    const jakarta = moment().tz('Asia/Jakarta');
+    const date = jakarta.format('DD-MM-YYYY');
+    const time = jakarta.format('h:mm A');
+    return `${date} | Today at ${time} | ${interaction.user.tag}`;
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('settings')
@@ -9,11 +17,6 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
     async execute(interaction) {
-        // Format waktu hanya dalam 12-hour format (PM/AM)
-        const timeString = moment()
-            .tz('Asia/Jakarta')
-            .format('h:mm A'); // Ini akan menghasilkan format seperti "11:09 PM"
-
         // Create main settings embed
         const embed = new EmbedBuilder()
             .setColor(0x3498db)
@@ -28,9 +31,8 @@ module.exports = {
                 '',
                 '*Note: Some options require specific permissions.*'
             ].join('\n'))
-            // Hapus .setTimestamp() karena ini menyebabkan timestamp tambahan
             .setFooter({ 
-                text: `Today at ${timeString}`,
+                text: getFooterText(interaction),
                 iconURL: interaction.client.user.displayAvatarURL()
             });
 
