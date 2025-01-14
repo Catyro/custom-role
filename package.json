@@ -11,14 +11,13 @@
   "author": "Catyro",
   "license": "MIT",
   "dependencies": {
-    "discord.js": "^14.14.1",     // Update ke versi terbaru
-    "dotenv": "^16.3.1",          // Update ke versi terbaru
+    "discord.js": "^14.11.0",
+    "dotenv": "^16.0.3",
     "moment-timezone": "^0.5.43",
-    "node-fetch": "^3.3.2",       // Update ke versi 3
-    "lru-cache": "^10.1.0"        // Ganti inflight dengan ini
+    "node-fetch": "^2.6.9"
   },
   "devDependencies": {
-    "jest": "^29.7.0",           // Update ke versi terbaru
-    "nodemon": "^3.0.2"          // Update ke versi terbaru
+    "jest": "^29.5.0",
+    "nodemon": "^2.0.22"
   }
 }
