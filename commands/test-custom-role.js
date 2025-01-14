@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const EmbedService = require('../utils/embed-builder');
-const RoleManager = require('../utils/role-manager');
+const EmbedService = require('/home/container/utils/embed-builder');
+const RoleManager = require('/home/container/utils/role-manager');
 
 function createInitialButtons() {
     return new ActionRowBuilder()
