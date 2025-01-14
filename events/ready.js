@@ -1,7 +1,7 @@
 const { Events } = require('discord.js');
-const Logger = require('../utils/logger');
+const Logger = require('/home/container/utils/logger');
 const moment = require('moment-timezone');
-const { version } = require('../package.json');
+const { version } = require('/home/container/package.json');
 
 class ReadyHandler {
     static async handle(client) {
