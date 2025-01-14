@@ -2,19 +2,15 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFl
 const Logger = require('../utils/logger');
 const moment = require('moment-timezone');
 
-// Helper function untuk mendapatkan waktu Jakarta
-function getJakartaTime() {
-    return moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+// Utility function untuk format footer yang konsisten
+function getFormattedFooter(interaction) {
+    const jakarta = moment().tz('Asia/Jakarta');
+    const date = jakarta.format('DD-MM-YYYY');
+    const time = jakarta.format('h:mm A');
+    return `${date} | Today at ${time} | ${interaction.user.tag}`;
 }
 
-// Helper function untuk format footer
-function getFooterText(interaction) {
-    const jakartaTime = getJakartaTime();
-    const totalRoles = interaction.guild?.roles.cache.size || 0;
-    return `Total Roles: ${totalRoles} | ${jakartaTime} (UTC+7) | Catyro`;
-}
-
-// Utility functions untuk membuat buttons
+// Utility functions for creating buttons
 function createCloseButton() {
     return new ButtonBuilder()
         .setCustomId('close_menu')
@@ -40,7 +36,6 @@ async function handleListRoles(interaction, page = 0) {
                 return `${role} (**${memberCount}** members)`;
             });
 
-        // Split roles into chunks of 15 to stay within embed limits
         const itemsPerPage = 15;
         const chunks = [];
         for (let i = 0; i < roles.length; i += itemsPerPage) {
@@ -55,7 +50,7 @@ async function handleListRoles(interaction, page = 0) {
                         .setTitle('❌ No Roles')
                         .setDescription('No roles found in this server.')
                         .setFooter({ 
-                            text: getFooterText(interaction),
+                            text: getFormattedFooter(interaction),
                             iconURL: interaction.client.user.displayAvatarURL()
                         })
                 ],
@@ -63,21 +58,19 @@ async function handleListRoles(interaction, page = 0) {
             });
         }
 
-        // Ensure page is within bounds
         page = Math.max(0, Math.min(page, chunks.length - 1));
 
         const embed = new EmbedBuilder()
             .setColor(0x3498db)
             .setTitle(`📋 Roles List (Page ${page + 1}/${chunks.length})`)
-            .setDescription(chunks[page].join('\n'))
+            .setDescription(chunks[page].join('\n\n'))
             .setFooter({ 
-                text: getFooterText(interaction),
+                text: getFormattedFooter(interaction),
                 iconURL: interaction.client.user.displayAvatarURL()
             });
 
         const buttons = [];
         
-        // Add navigation buttons
         if (chunks.length > 1) {
             if (page > 0) {
                 buttons.push(
@@ -100,9 +93,7 @@ async function handleListRoles(interaction, page = 0) {
             }
         }
 
-        // Add back and close buttons
         buttons.push(createBackButton(), createCloseButton());
-
         const row = new ActionRowBuilder().addComponents(buttons);
 
         await interaction.update({ embeds: [embed], components: [row] });
@@ -115,7 +106,7 @@ async function handleListRoles(interaction, page = 0) {
                     .setTitle('❌ Error')
                     .setDescription('Terjadi kesalahan saat mengambil daftar role.')
                     .setFooter({ 
-                        text: getFooterText(interaction),
+                        text: getFormattedFooter(interaction),
                         iconURL: interaction.client.user.displayAvatarURL()
                     })
             ],
@@ -133,7 +124,7 @@ async function handleSetLogChannel(interaction) {
                     .setTitle('❌ Akses Ditolak')
                     .setDescription('Anda tidak memiliki izin untuk mengatur log channel.')
                     .setFooter({ 
-                        text: getFooterText(interaction),
+                        text: getFormattedFooter(interaction),
                         iconURL: interaction.client.user.displayAvatarURL()
                     })
             ],
@@ -157,7 +148,7 @@ async function handleSetLogChannel(interaction) {
             '⏰ Waktu: 30 detik'
         ].join('\n'))
         .setFooter({ 
-            text: getFooterText(interaction),
+            text: getFormattedFooter(interaction),
             iconURL: interaction.client.user.displayAvatarURL()
         });
 
@@ -187,7 +178,7 @@ async function handleSetLogChannel(interaction) {
                     .setTitle('✅ Log Channel Set')
                     .setDescription(`Channel log telah diatur ke ${message.content}`)
                     .setFooter({ 
-                        text: getFooterText(interaction),
+                        text: getFormattedFooter(interaction),
                         iconURL: interaction.client.user.displayAvatarURL()
                     });
 
@@ -196,11 +187,10 @@ async function handleSetLogChannel(interaction) {
                     components: [new ActionRowBuilder().addComponents(createBackButton(), createCloseButton())]
                 });
 
-                // Log the channel set
                 await Logger.log('LOG_CHANNEL_SET', {
                     channelId: message.content.replace(/[<#>]/g, ''),
                     userId: interaction.user.id,
-                    timestamp: getJakartaTime()
+                    timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
                 });
             } else {
                 throw new Error('Failed to set log channel');
@@ -212,7 +202,7 @@ async function handleSetLogChannel(interaction) {
                 .setTitle('❌ Error')
                 .setDescription('Terjadi kesalahan saat mengatur log channel.\nPastikan channel valid dan bot memiliki akses.')
                 .setFooter({ 
-                    text: getFooterText(interaction),
+                    text: getFormattedFooter(interaction),
                     iconURL: interaction.client.user.displayAvatarURL()
                 });
 
@@ -230,7 +220,7 @@ async function handleSetLogChannel(interaction) {
                 .setTitle('⏰ Waktu Habis')
                 .setDescription('Waktu pengaturan log channel telah habis.\nSilakan coba lagi.')
                 .setFooter({ 
-                    text: getFooterText(interaction),
+                    text: getFormattedFooter(interaction),
                     iconURL: interaction.client.user.displayAvatarURL()
                 });
 
@@ -244,13 +234,13 @@ async function handleSetLogChannel(interaction) {
 
 async function handleViewLogs(interaction) {
     try {
-        const logs = await Logger.getLogs(50); // Get last 50 logs
+        const logs = await Logger.getLogs(50);
         const embed = new EmbedBuilder()
             .setColor(0x3498db)
             .setTitle('📋 Recent Logs')
             .setDescription(logs || '*No logs available.*')
             .setFooter({ 
-                text: getFooterText(interaction),
+                text: getFormattedFooter(interaction),
                 iconURL: interaction.client.user.displayAvatarURL()
             });
 
@@ -275,7 +265,7 @@ async function handleViewLogs(interaction) {
                     .setTitle('❌ Error')
                     .setDescription('Error retrieving logs.')
                     .setFooter({ 
-                        text: getFooterText(interaction),
+                        text: getFormattedFooter(interaction),
                         iconURL: interaction.client.user.displayAvatarURL()
                     })
             ],
@@ -289,9 +279,18 @@ async function handleBack(interaction) {
         const embed = new EmbedBuilder()
             .setColor(0x3498db)
             .setTitle('⚙️ Bot Settings')
-            .setDescription('Please select an option below:')
+            .setDescription([
+                'Welcome to the bot settings menu!',
+                'Please select an option below:',
+                '',
+                '📋 **View Logs** - View recent bot activity',
+                '📌 **Set Log Channel** - Configure logging channel',
+                '👥 **List Roles** - View all server roles',
+                '',
+                '*Note: Some options require specific permissions.*'
+            ].join('\n'))
             .setFooter({ 
-                text: getFooterText(interaction),
+                text: getFormattedFooter(interaction),
                 iconURL: interaction.client.user.displayAvatarURL()
             });
 
@@ -325,6 +324,14 @@ async function handleBack(interaction) {
     }
 }
 
+// Fungsi untuk format footer yang konsisten
+function getFooterText(interaction) {
+    const jakarta = moment().tz('Asia/Jakarta');
+    const date = jakarta.format('DD-MM-YYYY');
+    const time = jakarta.format('h:mm A');
+    return `${date} | Today at ${time} | ${interaction.user.tag}`;
+}
+
 async function handleCloseMenu(interaction) {
     try {
         // Cek apakah bot memiliki izin untuk menghapus pesan
@@ -337,6 +344,10 @@ async function handleCloseMenu(interaction) {
                     new EmbedBuilder()
                         .setDescription('Menu telah ditutup.')
                         .setColor(0x2f3136)
+                        .setFooter({ 
+                            text: getFooterText(interaction),
+                            iconURL: interaction.client.user.displayAvatarURL()
+                        })
                 ]
             });
         }
@@ -356,8 +367,6 @@ module.exports = {
     name: 'interactionCreate',
     async execute(interaction) {
         if (!interaction.isButton()) return;
-
-        const currentTime = moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
 
         try {
             if (interaction.customId.startsWith('list_roles_')) {
@@ -391,7 +400,6 @@ module.exports = {
                         .setColor(0xe74c3c)
                         .setTitle('❌ Error')
                         .setDescription('Unknown button interaction.')
-                        .setTimestamp()
                         .setFooter({ 
                             text: getFooterText(interaction),
                             iconURL: interaction.client.user.displayAvatarURL()
@@ -409,7 +417,6 @@ module.exports = {
                     .setColor(0xe74c3c)
                     .setTitle('❌ Error')
                     .setDescription('Terjadi kesalahan saat memproses permintaan.')
-                    .setTimestamp()
                     .setFooter({ 
                         text: getFooterText(interaction),
                         iconURL: interaction.client.user.displayAvatarURL()
@@ -438,18 +445,12 @@ module.exports = {
                 buttonId: interaction.customId,
                 userId: interaction.user.id,
                 user: interaction.user.tag,
-                timestamp: currentTime,
                 guild: interaction.guild?.name || 'DM',
-                channel: interaction.channel?.name || 'Unknown'
+                channel: interaction.channel?.name || 'Unknown',
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
         } catch (error) {
             console.error('Error logging button interaction:', error);
         }
     }
 };
-
-function getFooterText(interaction) {
-    const jakartaTime = moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
-    const totalRoles = interaction.guild.roles.cache.size;
-    return `${totalRoles} Roles | ${jakartaTime} (UTC+7) | ${interaction.user.tag}`;
-}
