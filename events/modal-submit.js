@@ -1,4 +1,4 @@
-const { Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Events, EmbedBuilder } = require('discord.js');
 const EmbedService = require('/home/container/utils/embed-builder');
 const RoleManager = require('/home/container/utils/role-manager');
 const Logger = require('/home/container/utils/logger');
