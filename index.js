@@ -280,8 +280,8 @@ client.on('ready', async () => {
         console.log('\x1b[33m%s\x1b[0m', `📋 Commands Loaded: ${client.commands.size}`);
         console.log('\x1b[36m%s\x1b[0m', '══════════════════════════════════════');
 
-        // Log startup to logger
-        await Logger.log('SYSTEM', {
+// Log startup to logger
+await Logger.log('SYSTEM', {
     message: [
         '🚀 Bot has started up successfully!',
         `📡 Connected as: ${client.user.tag}`,
@@ -294,50 +294,6 @@ client.on('ready', async () => {
     userId: client.user.id,
     timestamp: currentTime
 });
-
-// Deploy commands saat startup
-const deployCommands = async () => {
-    try {
-        console.log('\x1b[33m%s\x1b[0m', '🔄 Deploying slash commands...');
-        
-        const commands = [];
-        const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
-
-        for (const file of commandFiles) {
-            const command = require(`./commands/${file}`);
-            if ('data' in command && 'execute' in command) {
-                commands.push(command.data.toJSON());
-                console.log(`📥 Loaded command: ${command.data.name}`);
-            }
-        }
-
-        const rest = new REST({ version: '10' }).setToken(config.DISCORD_TOKEN);
-
-        await rest.put(
-            Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, config.DISCORD_GUILD_ID),
-            { body: commands },
-        );
-
-        console.log('\x1b[32m%s\x1b[0m', '✅ Successfully deployed slash commands!');
-        
-        // Log successful deployment
-        await Logger.log('SYSTEM', {
-            message: `🔄 Deployed ${commands.length} slash commands successfully!`,
-            timestamp: currentTime
-        });
-
-    } catch (error) {
-        console.error('\x1b[31m%s\x1b[0m', '❌ Error deploying slash commands:', error);
-        await Logger.log('ERROR', {
-            type: 'DEPLOY_COMMANDS',
-            error: error.message,
-            timestamp: currentTime
-        });
-    }
-};
-
-// Execute command deployment
-await deployCommands();
 
 // Log to console
 console.log('\x1b[32m%s\x1b[0m', '✨ All systems operational!');
@@ -354,7 +310,7 @@ console.log('\x1b[36m%s\x1b[0m', '═══════════════�
 
     } catch (error) {
         console.error('Error in ready event:', error);
-        Logger.log('ERROR', {
+        await Logger.log('ERROR', {
             type: 'STARTUP_ERROR',
             error: error.message,
             timestamp: currentTime
@@ -369,7 +325,7 @@ const initializeBot = async () => {
         console.log('🔄 Loading commands and events...');
         ensureDirectory(path.join(__dirname, 'commands'));
         ensureDirectory(path.join(__dirname, 'events'));
-        await loadCommands();
+        await loadAndDeployCommands(); // Menggunakan fungsi yang sudah didefinisikan
         await loadEvents();
         await client.login(config.DISCORD_TOKEN);
     } catch (error) {
