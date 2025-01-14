@@ -1,9 +1,9 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder } = require('discord.js');
-const EmbedService = require('../utils/embed-builder');
-const RoleManager = require('../utils/role-manager');
-const Validator = require('../utils/validator');
-const Logger = require('../utils/logger');
+const EmbedService = require('/home/container/utils/embed-builder');
+const RoleManager = require('/home/container/utils/role-manager');
+const Validator = require('/home/container/utils/validator');
+const Logger = require('/home/container/utils/logger');
 const moment = require('moment-timezone');
 
 // Constants
