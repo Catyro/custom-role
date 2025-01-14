@@ -31,7 +31,9 @@ module.exports = {
         PermissionFlagsBits.SendMessages,
         PermissionFlagsBits.EmbedLinks,
         PermissionFlagsBits.UseExternalEmojis,
-        PermissionFlagsBits.AddReactions
+        PermissionFlagsBits.AddReactions,
+        PermissionFlagsBits.ManageMessages, // Tambahan untuk menghapus pesan
+        PermissionFlagsBits.AttachFiles     // Tambahan untuk upload gambar
     ],
 
     // Custom Role Settings
@@ -40,6 +42,8 @@ module.exports = {
         MAX_ROLES_PER_GUILD: 50,
         MAX_NAME_LENGTH: 100,
         MAX_ICON_SIZE: 256 * 1024, // 256KB in bytes
+        ALLOWED_IMAGE_TYPES: ['image/png', 'image/jpeg', 'image/jpg'],
+        MIN_NAME_LENGTH: 2
     },
 
     // Cooldown Settings (in milliseconds)
@@ -47,6 +51,14 @@ module.exports = {
         CREATE_ROLE: 300000,  // 5 minutes
         EDIT_ROLE: 60000,     // 1 minute
         TEST_ROLE: 300000,    // 5 minutes
-        default: 3000         // 3 seconds
+        default: 3000,        // 3 seconds
+        BOOST_CHECK: 86400000 // 24 hours
+    },
+
+    // Data Paths
+    PATHS: {
+        ROLES: './data/roles.json',
+        LOGS: './data/logs.json',
+        CONFIG: './data/config.json'
     }
 };
