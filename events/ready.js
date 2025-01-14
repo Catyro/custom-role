@@ -1,5 +1,7 @@
 const { Events } = require('discord.js');
 const Logger = require('/home/container/utils/logger');
+const RoleManager = require('/home/container/utils/role-manager');
+const { EmbedBuilder } = require('discord.js');
 const moment = require('moment-timezone');
 const { version } = require('/home/container/package.json');
 
