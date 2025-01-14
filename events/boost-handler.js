@@ -1,7 +1,7 @@
 const { Events } = require('discord.js');
-const EmbedService = require('../utils/embed-builder');
-const RoleManager = require('../utils/role-manager');
-const Logger = require('../utils/logger');
+const EmbedService = require('/home/container/utils/embed-builder');
+const RoleManager = require('/home/container/utils/role-manager');
+const Logger = require('/home/container/utils/logger');
 const Config = require('../config');
 
 class BoostHandler {
