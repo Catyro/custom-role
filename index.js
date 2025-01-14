@@ -1,8 +1,8 @@
 const { Events } = require('discord.js');
-const Logger = require('../utils/logger');
+const Logger = require('./utils/logger');
 const moment = require('moment-timezone');
 const { version } = require('../package.json');
-
+const config = require('./config.js');
 // Fungsi untuk mendapatkan waktu Jakarta
 const getJakartaTime = () => {
     const now = new Date();
