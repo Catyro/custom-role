@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const Logger = require('../utils/logger');
+const Logger = require('/home/container/utils/logger');
 const moment = require('moment-timezone');
 
 // Fungsi untuk format footer yang konsisten
