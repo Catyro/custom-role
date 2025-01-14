@@ -5,7 +5,7 @@ const EmbedService = require('../utils/embed-builder');
 const RoleManager = require('../utils/role-manager');
 const Logger = require('../utils/logger');
 
-// Tracking untuk scheduled jobs
+// Simpan referensi scheduled jobs
 const scheduledJobs = new Map();
 
 module.exports = {
@@ -13,7 +13,51 @@ module.exports = {
     async execute(oldMember, newMember) {
         // Check if member started boosting
         if (!oldMember.premiumSince && newMember.premiumSince) {
-            await handleBoostStart(newMember);
+            try {
+                const boostCount = await RoleManager.getBoostCount(newMember.id);
+                const opportunities = boostCount - RoleManager.getUserRoles(newMember.id).length;
+
+                // Coba kirim DM dengan safe handling
+                try {
+                    const embed = EmbedService.customRole(boostCount, opportunities);
+                    const message = await newMember.send({
+                        embeds: [embed],
+                        components: [createInitialButtons()]
+                    });
+
+                    // Store message ID for later reference
+                    await RoleManager.setActiveMessage(newMember.id, message.id);
+                } catch (dmError) {
+                    console.log(`Tidak dapat mengirim DM ke ${newMember.user.tag}: ${dmError.message}`);
+                    // Log ke channel khusus jika DM gagal
+                    await Logger.log('DM_FAILED', {
+                        userId: newMember.id,
+                        reason: dmError.message,
+                        timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                    });
+                }
+
+                // Log boost start
+                await Logger.log('BOOST_START', {
+                    userId: newMember.id,
+                    guildId: newMember.guild.id,
+                    boostCount,
+                    opportunities,
+                    timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                });
+
+                // Schedule warning menggunakan node-schedule
+                scheduleBoostWarning(newMember);
+
+            } catch (error) {
+                console.error('Error handling boost:', error);
+                await Logger.log('ERROR', {
+                    type: 'BOOST_HANDLER',
+                    userId: newMember.id,
+                    error: error.message,
+                    timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                });
+            }
         }
         // Check if member stopped boosting
         else if (oldMember.premiumSince && !newMember.premiumSince) {
@@ -21,152 +65,6 @@ module.exports = {
         }
     }
 };
-
-async function handleBoostStart(member) {
-    try {
-        const boostCount = await RoleManager.getBoostCount(member.id);
-        const opportunities = boostCount - RoleManager.getUserRoles(member.id).length;
-
-        // Cancel any existing warning jobs for this user
-        cancelExistingWarningJob(member.id);
-
-        // Schedule new warning
-        await scheduleBoostWarning(member);
-
-        // Try to send DM
-        try {
-            const embed = EmbedService.customRole(boostCount, opportunities);
-            const message = await member.send({
-                embeds: [embed],
-                components: [createInitialButtons()]
-            });
-
-            // Store message ID for later reference
-            await RoleManager.setActiveMessage(member.id, message.id);
-        } catch (dmError) {
-            // Log DM failure but don't throw error
-            console.warn(`Unable to send DM to ${member.user.tag}:`, dmError);
-            await Logger.log('WARNING', {
-                type: 'DM_FAILED',
-                userId: member.id,
-                reason: 'Unable to send boost start message',
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-        }
-
-        // Log boost start regardless of DM success
-        await Logger.log('BOOST_START', {
-            userId: member.id,
-            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-        });
-
-    } catch (error) {
-        console.error('Error handling boost:', error);
-        await Logger.log('ERROR', {
-            type: 'BOOST_HANDLER',
-            error: error.message,
-            userId: member.id,
-            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-        });
-    }
-}
-
-async function handleBoostEnd(member) {
-    try {
-        // Cancel any existing warning jobs
-        cancelExistingWarningJob(member.id);
-
-        // Get all roles before clearing
-        const userRoles = await RoleManager.getUserRoles(member.guild.id, member.id);
-        
-        // Track success/failure for each role
-        const results = {
-            success: [],
-            failed: []
-        };
-
-        // Remove all custom roles created by this booster
-        for (const roleData of userRoles) {
-            try {
-                const role = await member.guild.roles.fetch(roleData.roleId);
-                if (role) {
-                    // Get target member
-                    const targetMember = await member.guild.members.fetch(roleData.targetId);
-                    if (targetMember) {
-                        await targetMember.roles.remove(role);
-                    }
-                    await role.delete('Boost ended');
-                    results.success.push(roleData.roleId);
-                }
-            } catch (roleError) {
-                console.error(`Error removing role ${roleData.roleId}:`, roleError);
-                results.failed.push(roleData.roleId);
-            }
-        }
-
-        // Clear user's custom roles from database
-        await RoleManager.clearUserRoles(member.guild.id, member.id);
-
-        // Remove active message if exists
-        const messageId = await RoleManager.getActiveMessage(member.id);
-        if (messageId) {
-            try {
-                const dmChannel = await member.createDM();
-                const message = await dmChannel.messages.fetch(messageId);
-                if (message) await message.delete();
-            } catch (messageError) {
-                console.warn('Error deleting message:', messageError);
-            }
-        }
-
-        // Log the boost end event with results
-        await Logger.log('BOOST_END', {
-            userId: member.id,
-            results: {
-                successCount: results.success.length,
-                failedCount: results.failed.length,
-                failedRoles: results.failed
-            },
-            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-        });
-
-        // Try to notify user
-        try {
-            await member.send({
-                embeds: [
-                    EmbedService.info(
-                        'Boost Berakhir',
-                        [
-                            '🔔 Server boost Anda telah berakhir.',
-                            '',
-                            `✅ ${results.success.length} role berhasil dihapus`,
-                            results.failed.length > 0 ? `❌ ${results.failed.length} role gagal dihapus` : '',
-                            '',
-                            'Semua custom role yang terkait telah dihapus dari database.'
-                        ].filter(Boolean).join('\n')
-                    )
-                ]
-            });
-        } catch (dmError) {
-            console.warn(`Unable to send boost end notification to ${member.user.tag}:`, dmError);
-            await Logger.log('WARNING', {
-                type: 'DM_FAILED',
-                userId: member.id,
-                reason: 'Unable to send boost end notification',
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-        }
-
-    } catch (error) {
-        console.error('Error handling boost end:', error);
-        await Logger.log('ERROR', {
-            type: 'BOOST_END_HANDLER',
-            error: error.message,
-            userId: member.id,
-            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-        });
-    }
-}
 
 function createInitialButtons() {
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
@@ -181,98 +79,166 @@ function createInitialButtons() {
         );
 }
 
-function cancelExistingWarningJob(userId) {
-    const existingJob = scheduledJobs.get(userId);
-    if (existingJob) {
-        existingJob.cancel();
-        scheduledJobs.delete(userId);
+async function handleBoostEnd(member) {
+    try {
+        // Cancel scheduled warnings if any
+        const jobKey = `boost_warning_${member.id}`;
+        if (scheduledJobs.has(jobKey)) {
+            scheduledJobs.get(jobKey).cancel();
+            scheduledJobs.delete(jobKey);
+        }
+
+        // Remove all custom roles created by this booster
+        const userRoles = await RoleManager.getUserRoles(member.guild.id, member.id);
+        for (const roleData of userRoles) {
+            try {
+                const role = await member.guild.roles.fetch(roleData.roleId);
+                if (role) {
+                    // Get target member dengan safe handling
+                    try {
+                        const targetMember = await member.guild.members.fetch(roleData.targetId);
+                        if (targetMember) {
+                            await targetMember.roles.remove(role);
+                            
+                            // Notify target member
+                            try {
+                                await targetMember.send({
+                                    embeds: [
+                                        EmbedService.info(
+                                            'Role Dihapus',
+                                            `Role ${role.name} telah dihapus karena pemberi boost telah berhenti boost server.`
+                                        )
+                                    ]
+                                });
+                            } catch (dmError) {
+                                console.log(`Tidak dapat mengirim DM ke ${targetMember.user.tag}`);
+                            }
+                        }
+                    } catch (memberError) {
+                        console.error(`Error fetching target member: ${memberError.message}`);
+                    }
+                    
+                    // Delete role
+                    await role.delete('Boost ended');
+                }
+            } catch (roleError) {
+                console.error(`Error handling role ${roleData.roleId}: ${roleError.message}`);
+            }
+        }
+
+        // Clear user's custom roles from database
+        await RoleManager.clearUserRoles(member.guild.id, member.id);
+
+        // Remove active message if exists dengan safe handling
+        const messageId = await RoleManager.getActiveMessage(member.id);
+        if (messageId) {
+            try {
+                const dmChannel = await member.createDM();
+                const message = await dmChannel.messages.fetch(messageId);
+                if (message) await message.delete();
+            } catch (error) {
+                console.log('Error deleting message:', error.message);
+            }
+        }
+
+        // Log boost end
+        await Logger.log('BOOST_END', {
+            userId: member.id,
+            guildId: member.guild.id,
+            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+        });
+
+        // Notify user dengan safe handling
+        try {
+            await member.send({
+                embeds: [
+                    EmbedService.info(
+                        'Boost Berakhir',
+                        'Server boost Anda telah berakhir. Semua custom role yang terkait telah dihapus.'
+                    )
+                ]
+            });
+        } catch (dmError) {
+            console.log(`Tidak dapat mengirim DM ke ${member.user.tag}`);
+        }
+
+    } catch (error) {
+        console.error('Error handling boost end:', error);
+        await Logger.log('ERROR', {
+            type: 'BOOST_END_HANDLER',
+            userId: member.id,
+            guildId: member.guild.id,
+            error: error.message,
+            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+        });
     }
 }
 
-async function scheduleBoostWarning(member) {
-    try {
-        // Calculate warning time (24h before boost ends)
-        const boostEndDate = new Date(member.premiumSince);
-        boostEndDate.setDate(boostEndDate.getDate() + 30);
-        
-        const warningDate = new Date(boostEndDate);
-        warningDate.setDate(warningDate.getDate() - 1);
+function scheduleBoostWarning(member) {
+    const jobKey = `boost_warning_${member.id}`;
 
-        // Only schedule if warning time is in the future
-        if (warningDate > new Date()) {
-            // Cancel any existing job first
-            cancelExistingWarningJob(member.id);
+    // Cancel existing job if any
+    if (scheduledJobs.has(jobKey)) {
+        scheduledJobs.get(jobKey).cancel();
+    }
 
-            // Schedule new warning
-            const job = schedule.scheduleJob(warningDate, async () => {
-                try {
-                    // Verify member is still boosting
-                    const updatedMember = await member.guild.members.fetch(member.id);
-                    if (!updatedMember?.premiumSince) return;
+    // Calculate warning time (24 hours before boost ends)
+    const boostEndDate = moment(member.premiumSince)
+        .add(30, 'days')
+        .tz('Asia/Jakarta');
+    
+    const warningDate = moment(boostEndDate)
+        .subtract(24, 'hours')
+        .tz('Asia/Jakarta');
 
-                    // Try to send warning DM
+    // Only schedule if warning time is in the future
+    if (warningDate.isAfter(moment())) {
+        const job = schedule.scheduleJob(warningDate.toDate(), async () => {
+            try {
+                // Check if still boosting
+                const updatedMember = await member.guild.members.fetch(member.id);
+                if (updatedMember.premiumSince) {
                     try {
                         await member.send({
                             embeds: [
                                 EmbedService.warning(
-                                    '⚠️ Peringatan Boost',
+                                    'Peringatan Boost',
                                     [
-                                        'Boost Anda akan berakhir dalam 24 jam.',
+                                        '⚠️ Boost Anda akan berakhir dalam 24 jam.',
+                                        'Pastikan untuk memperpanjang boost agar custom role Anda tetap aktif.',
                                         '',
-                                        '• Pastikan untuk memperpanjang boost agar custom role Anda tetap aktif',
-                                        '• Jika boost berakhir, semua custom role akan dihapus',
-                                        '',
-                                        `Waktu berakhir: ${moment(boostEndDate).tz('Asia/Jakarta').format('DD MMMM YYYY HH:mm:ss')}`
+                                        `Waktu berakhir: ${boostEndDate.format('DD MMMM YYYY HH:mm')} WIB`
                                     ].join('\n')
                                 )
                             ]
                         });
 
-                        // Log successful warning
                         await Logger.log('BOOST_WARNING_SENT', {
                             userId: member.id,
-                            expiryTime: boostEndDate.toISOString(),
+                            guildId: member.guild.id,
+                            expiryDate: boostEndDate.format(),
                             timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
                         });
                     } catch (dmError) {
-                        console.warn(`Unable to send boost warning to ${member.user.tag}:`, dmError);
-                        await Logger.log('WARNING', {
-                            type: 'DM_FAILED',
-                            userId: member.id,
-                            reason: 'Unable to send boost warning',
-                            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-                        });
+                        console.log(`Tidak dapat mengirim warning DM ke ${member.user.tag}`);
                     }
-                } catch (error) {
-                    console.error('Error in boost warning job:', error);
-                    await Logger.log('ERROR', {
-                        type: 'BOOST_WARNING_JOB',
-                        error: error.message,
-                        userId: member.id,
-                        timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-                    });
-                } finally {
-                    // Clean up job from tracking
-                    scheduledJobs.delete(member.id);
                 }
-            });
+            } catch (error) {
+                console.error('Error in boost warning job:', error);
+            } finally {
+                // Clean up job reference
+                scheduledJobs.delete(jobKey);
+            }
+        });
 
-            // Track the job
-            scheduledJobs.set(member.id, job);
+        // Store job reference
+        scheduledJobs.set(jobKey, job);
 
-            // Log scheduled warning
-            await Logger.log('BOOST_WARNING_SCHEDULED', {
-                userId: member.id,
-                scheduledFor: warningDate.toISOString(),
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-        }
-    } catch (error) {
-        console.error('Error scheduling boost warning:', error);
-        await Logger.log('ERROR', {
-            type: 'BOOST_WARNING_SCHEDULE',
-            error: error.message,
+        // Log scheduled warning
+        Logger.log('BOOST_WARNING_SCHEDULED', {
             userId: member.id,
+            guildId: member.guild.id,
+            scheduledFor: warningDate.format(),
             timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
         });
     }
