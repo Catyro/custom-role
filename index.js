@@ -5,7 +5,9 @@ const {
     Collection, 
     GatewayIntentBits, 
     Partials,
-    ActivityType
+    ActivityType,
+    REST,
+    Routes
 } = require('discord.js');
 const Logger = require('./utils/logger');
 const config = require('./config.js');
@@ -17,6 +19,24 @@ const getJakartaTime = () => {
     now.setHours(now.getHours() + utcOffset);
     return now.toISOString().replace('T', ' ').slice(0, 19);
 };
+
+// Fungsi untuk deploy commands
+async function deployCommands(commands) {
+    try {
+        console.log('Started refreshing application (/) commands.');
+        const rest = new REST({ version: '10' }).setToken(config.DISCORD_TOKEN);
+
+        await rest.put(
+            Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, config.DISCORD_GUILD_ID),
+            { body: commands }
+        );
+
+        console.log('Successfully reloaded application (/) commands.');
+    } catch (error) {
+        console.error('Error deploying commands:', error);
+        throw error;
+    }
+}
 
 // Fungsi untuk memvalidasi config
 const validateConfig = () => {
@@ -76,12 +96,13 @@ client.config = config;
 // Set client di Logger
 Logger.setClient(client);
 
-// Load commands
-const loadCommands = async () => {
+// Load dan deploy commands
+const loadAndDeployCommands = async () => {
     const commandsPath = path.join(__dirname, 'commands');
     ensureDirectory(commandsPath);
     
     const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+    const commandsData = [];
 
     for (const file of commandFiles) {
         const filePath = path.join(commandsPath, file);
@@ -89,6 +110,7 @@ const loadCommands = async () => {
             const command = require(filePath);
             if ('data' in command && 'execute' in command) {
                 client.commands.set(command.data.name, command);
+                commandsData.push(command.data.toJSON());
                 console.log(`✅ Loaded command: ${command.data.name}`);
             } else {
                 console.log(`⚠️ Command at ${filePath} missing required properties`);
@@ -97,6 +119,9 @@ const loadCommands = async () => {
             console.error(`❌ Error loading command ${file}:`, error);
         }
     }
+
+    // Deploy commands
+    await deployCommands(commandsData);
 };
 
 // Load events
@@ -257,38 +282,82 @@ client.on('ready', async () => {
 
         // Log startup to logger
         await Logger.log('SYSTEM', {
-            message: [
-                '🚀 Bot has started up successfully!',
-                `📡 Connected as: ${client.user.tag}`,
-                `👥 Servers: ${client.guilds.cache.size}`,
-                `👤 Users: ${totalUsers}`,
-                `📋 Commands: ${client.commands.size}`,
-                `⌚ Startup Time (UTC+7): ${currentTime}`,
-                `👨‍💻 Started by: Catyro`
-            ].join('\n'),
-            userId: client.user.id,
+    message: [
+        '🚀 Bot has started up successfully!',
+        `📡 Connected as: ${client.user.tag}`,
+        `👥 Servers: ${client.guilds.cache.size}`,
+        `👤 Users: ${totalUsers}`,
+        `📋 Commands: ${client.commands.size}`,
+        `⌚ Startup Time (UTC+7): ${currentTime}`,
+        `👨‍💻 Started by: Catyro`
+    ].join('\n'),
+    userId: client.user.id,
+    timestamp: currentTime
+});
+
+// Deploy commands saat startup
+const deployCommands = async () => {
+    try {
+        console.log('\x1b[33m%s\x1b[0m', '🔄 Deploying slash commands...');
+        
+        const commands = [];
+        const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+
+        for (const file of commandFiles) {
+            const command = require(`./commands/${file}`);
+            if ('data' in command && 'execute' in command) {
+                commands.push(command.data.toJSON());
+                console.log(`📥 Loaded command: ${command.data.name}`);
+            }
+        }
+
+        const rest = new REST({ version: '10' }).setToken(config.DISCORD_TOKEN);
+
+        await rest.put(
+            Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, config.DISCORD_GUILD_ID),
+            { body: commands },
+        );
+
+        console.log('\x1b[32m%s\x1b[0m', '✅ Successfully deployed slash commands!');
+        
+        // Log successful deployment
+        await Logger.log('SYSTEM', {
+            message: `🔄 Deployed ${commands.length} slash commands successfully!`,
             timestamp: currentTime
         });
 
-        // Log to console
-        console.log('\x1b[32m%s\x1b[0m', '✨ All systems operational!');
-        
-        // Log detailed server information
-        client.guilds.cache.forEach(guild => {
-            console.log('\x1b[34m%s\x1b[0m', `📌 Connected to server: ${guild.name} (${guild.id})`);
-            console.log('\x1b[34m%s\x1b[0m', `   ├ Members: ${guild.memberCount}`);
-            console.log('\x1b[34m%s\x1b[0m', `   ├ Channels: ${guild.channels.cache.size}`);
-            console.log('\x1b[34m%s\x1b[0m', `   └ Roles: ${guild.roles.cache.size}`);
+    } catch (error) {
+        console.error('\x1b[31m%s\x1b[0m', '❌ Error deploying slash commands:', error);
+        await Logger.log('ERROR', {
+            type: 'DEPLOY_COMMANDS',
+            error: error.message,
+            timestamp: currentTime
         });
+    }
+};
 
-        console.log('\x1b[36m%s\x1b[0m', '══════════════════════════════════════');
+// Execute command deployment
+await deployCommands();
+
+// Log to console
+console.log('\x1b[32m%s\x1b[0m', '✨ All systems operational!');
+
+// Log detailed server information
+client.guilds.cache.forEach(guild => {
+    console.log('\x1b[34m%s\x1b[0m', `📌 Connected to server: ${guild.name} (${guild.id})`);
+    console.log('\x1b[34m%s\x1b[0m', `   ├ Members: ${guild.memberCount}`);
+    console.log('\x1b[34m%s\x1b[0m', `   ├ Channels: ${guild.channels.cache.size}`);
+    console.log('\x1b[34m%s\x1b[0m', `   └ Roles: ${guild.roles.cache.size}`);
+});
+
+console.log('\x1b[36m%s\x1b[0m', '══════════════════════════════════════');
 
     } catch (error) {
         console.error('Error in ready event:', error);
         Logger.log('ERROR', {
             type: 'STARTUP_ERROR',
             error: error.message,
-            timestamp: getJakartaTime()
+            timestamp: currentTime
         });
     }
 });
