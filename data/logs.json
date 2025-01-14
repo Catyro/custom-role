@@ -1,0 +1,250 @@
+[
+  {
+    "type": "ERROR",
+    "command": "back_to_settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "error": "Cannot find module './commands/settings'\nRequire stack:\n- /home/container/events/button-interaction.js\n- /home/container/index.js",
+    "timestamp": "2025-01-14T09:07:31.001Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "view_logs",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-14T09:07:27.690Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "user": "svbside.",
+    "timestamp": "2025-01-14T09:07:23.108Z",
+    "userId": "unknown"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-14T09:07:22.639Z"
+  },
+  {
+    "type": "ERROR",
+    "command": "back_to_settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "error": "Cannot find module './commands/settings'\nRequire stack:\n- /home/container/events/button-interaction.js\n- /home/container/index.js",
+    "timestamp": "2025-01-14T09:05:49.774Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "view_logs",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-14T09:05:43.253Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "user": "svbside.",
+    "timestamp": "2025-01-14T09:05:06.289Z",
+    "userId": "unknown"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-14T09:05:05.947Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "boost-leaderboard",
+    "user": "svbside.",
+    "timestamp": "2025-01-14T08:59:50.593Z",
+    "userId": "unknown"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "boost-leaderboard",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-14T08:59:50.220Z"
+  },
+  {
+    "type": "ERROR",
+    "command": "back_to_settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "error": "Cannot find module './commands/settings'\nRequire stack:\n- /home/container/events/button-interaction.js\n- /home/container/index.js",
+    "timestamp": "2025-01-13T21:46:50.080Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "role_settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-13T21:46:25.164Z"
+  },
+  {
+    "type": "ERROR",
+    "command": "back_to_settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "error": "Cannot find module './commands/settings'\nRequire stack:\n- /home/container/events/button-interaction.js\n- /home/container/index.js",
+    "timestamp": "2025-01-13T21:46:16.308Z"
+  },
+  {
+    "type": "ERROR",
+    "command": "back_to_settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "error": "Cannot find module './commands/settings'\nRequire stack:\n- /home/container/events/button-interaction.js\n- /home/container/index.js",
+    "timestamp": "2025-01-13T21:45:25.239Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "view_logs",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-13T21:45:01.657Z"
+  },
+  {
+    "type": "ERROR",
+    "command": "back_to_settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "error": "Cannot find module './commands/settings'\nRequire stack:\n- /home/container/events/button-interaction.js\n- /home/container/index.js",
+    "timestamp": "2025-01-13T21:44:52.767Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "user": "svbside.",
+    "timestamp": "2025-01-13T21:44:40.561Z",
+    "userId": "unknown"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-13T21:44:40.220Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "view_logs",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-13T21:02:51.270Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "user": "svbside.",
+    "timestamp": "2025-01-13T21:02:44.220Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-13T21:02:43.879Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "boost-leaderboard",
+    "user": "svbside.",
+    "timestamp": "2025-01-13T21:01:47.842Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "view_logs",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-13T20:59:06.604Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "user": "svbside.",
+    "timestamp": "2025-01-13T20:57:55.430Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "userId": "1207290255305220108",
+    "user": "Catyro",
+    "timestamp": "2025-01-13T20:57:55.066Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "user": "svbside.",
+    "timestamp": "2025-01-13T20:24:36.582Z"
+  },
+  {
+    "type": "LOG_CHANNEL_SET",
+    "user": "svbside.",
+    "channelId": "1271038764956782675",
+    "channelName": "📂・log-moderation",
+    "timestamp": "2025-01-13T20:21:49.732Z"
+  },
+  {
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "user": "svbside.",
+    "timestamp": "2025-01-13T20:20:56.144Z"
+  },
+  {
+    "timestamp": "2025-01-13T16:21:44.871Z",
+    "type": "CHANNEL_SET",
+    "channelId": "1271038764956782675",
+    "channelName": "📂・log-moderation",
+    "setBy": "System"
+  },
+  {
+    "timestamp": "2025-01-13T18:04:51.023Z",
+    "type": "CHANNEL_SET",
+    "channelId": "1271038764956782675",
+    "channelName": "📂・log-moderation",
+    "setBy": "System"
+  },
+  {
+    "timestamp": "2025-01-13T18:05:50.661Z",
+    "type": "ERROR",
+    "command": "setting",
+    "user": "svbside.",
+    "error": "RoleManager.getAllCustomRoles is not a function"
+  },
+  {
+    "timestamp": "2025-01-13T20:08:52.476Z",
+    "type": "COMMAND_EXECUTE",
+    "command": "settings",
+    "user": "svbside."
+  },
+  {
+    "timestamp": "2025-01-13T20:09:31.098Z",
+    "type": "CHANNEL_SET",
+    "setBy": "System"
+  },
+  {
+    "timestamp": "2025-01-13T20:09:33.950Z",
+    "type": "LOG_CHANNEL_SET",
+    "user": "svbside.",
+    "channelId": "1271038764956782675",
+    "channelName": "📂・log-moderation"
+  },
+  {
+    "timestamp": "2025-01-13T20:10:55.759Z",
+    "type": "CHANNEL_SET",
+    "setBy": "System"
+  },
+  {
+    "timestamp": "2025-01-13T20:10:56.767Z",
+    "type": "LOG_CHANNEL_SET",
+    "user": "svbside.",
+    "channelId": "1271038764956782675",
+    "channelName": "📂・log-moderation"
+  }
+]
