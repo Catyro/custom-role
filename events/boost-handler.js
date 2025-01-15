@@ -1,21 +1,18 @@
+const { Events } = require('discord.js');
+const CustomEmbedBuilder = require('../utils/embed-builder');
 const RoleManager = require('../utils/role-manager');
-const EmbedBuilder = require('../utils/embed-builder');
 const Logger = require('../utils/logger');
-const moment = require('moment-timezone');
 
 module.exports = {
-    name: 'guildMemberUpdate',
+    name: Events.GuildMemberUpdate,
     async execute(oldMember, newMember) {
-        // Check if member started/stopped boosting
-        const wasBooster = oldMember.premiumSince !== null;
-        const isBooster = newMember.premiumSince !== null;
-
         try {
-            if (!wasBooster && isBooster) {
-                // Member started boosting
+            // Check if member started boosting
+            if (!oldMember.premiumSince && newMember.premiumSince) {
                 await handleNewBooster(newMember);
-            } else if (wasBooster && !isBooster) {
-                // Member stopped boosting
+            }
+            // Check if member stopped boosting
+            else if (oldMember.premiumSince && !newMember.premiumSince) {
                 await handleBoostEnd(newMember);
             }
         } catch (error) {
@@ -25,7 +22,7 @@ module.exports = {
                 type: 'BOOST_HANDLER_ERROR',
                 error: error.message,
                 userId: newMember.id,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                timestamp: '2025-01-15 10:04:15'
             });
         }
     }
@@ -33,45 +30,38 @@ module.exports = {
 
 async function handleNewBooster(member) {
     try {
-        // Create custom role
-        const role = await RoleManager.createCustomRole(member, {
-            name: `[Custom] ${member.user.username}`,
-            color: '#f47fff'
-        });
-
         // Create welcome embed
-        const welcomeEmbed = new EmbedBuilder()
-            .setCustom('🌟', 'Terima Kasih Telah Boost!', 
-                `Hai ${member}, terima kasih telah boost server ini!\n` +
-                'Sebagai hadiah, kamu mendapatkan custom role yang bisa kamu edit sesuai keinginan.',
-                0xf47fff)
+        const embed = new CustomEmbedBuilder()
+            .setBoost('🎉 Server Boosted!',
+                `Terimakasih <@${member.id}> telah melakukan boost ke server!\n` +
+                'Kamu bisa membuat custom role spesial untukmu.')
             .addFields([
-                { 
-                    name: '🎨 Custom Role', 
-                    value: `${role}\nGunakan \`/edit-role\` untuk mengedit role kamu.`,
-                    inline: false 
-                },
-                {
-                    name: '📝 Ketentuan',
-                    value: '• Role akan dihapus jika kamu berhenti boost\n' +
-                           '• Nama dan warna role bisa diubah\n' +
-                           '• Role tidak memiliki permission khusus',
-                    inline: false
-                }
+                { name: '👤 Booster', value: `<@${member.id}>`, inline: true },
+                { name: '📅 Tanggal', value: '2025-01-15 10:04:15', inline: true }
             ]);
 
         // Send DM to booster
-        await member.send({ embeds: [welcomeEmbed] }).catch(() => {
+        const dmEmbed = new CustomEmbedBuilder()
+            .setBoost('🎉 Terimakasih sudah boost Server kami!',
+                'Untuk membuat custom role spesialmu, gunakan form dibawah ini.')
+            .addFields([
+                { name: '🎨 Ketentuan Role:', value: 
+                    '• Nama role bebas (2-100 karakter)\n' +
+                    '• Warna role bebas (HEX atau nama warna)\n' +
+                    '• Bisa menambahkan icon role (opsional)\n' +
+                    '• Tidak mengandung kata-kata tidak pantas' }
+            ]);
+
+        await member.send({ embeds: [dmEmbed] }).catch(() => {
             console.log(`Couldn't send DM to ${member.user.tag}`);
         });
 
         // Log boost event
-        await Logger.log('MEMBER_BOOSTED', {
+        await Logger.log('BOOST', {
             guildId: member.guild.id,
-            type: 'BOOST_START',
+            type: 'NEW_BOOST',
             userId: member.id,
-            roleId: role.id,
-            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            timestamp: '2025-01-15 10:04:15'
         });
 
     } catch (error) {
@@ -82,27 +72,28 @@ async function handleNewBooster(member) {
 
 async function handleBoostEnd(member) {
     try {
-        // Remove custom role
-        await RoleManager.removeCustomRole(member);
+        // Find and remove boost roles
+        const roles = await RoleManager.getRoles(member.guild.id);
+        const boostRoles = roles.filter(role => 
+            role.userId === member.id && 
+            role.type === 'BOOST'
+        );
 
-        // Create goodbye embed
-        const goodbyeEmbed = new EmbedBuilder()
-            .setCustom('💫', 'Boost Berakhir', 
-                `Hai ${member}, boost kamu di server ${member.guild.name} telah berakhir.\n` +
-                'Custom role kamu telah dihapus. Boost lagi untuk mendapatkan custom role baru!',
-                0x7289da);
+        for (const roleData of boostRoles) {
+            const role = await member.guild.roles.fetch(roleData.roleId);
+            if (role) {
+                await member.roles.remove(role);
+                await role.delete('Boost ended');
+                await RoleManager.removeRoleData(role.id);
+            }
+        }
 
-        // Send DM to former booster
-        await member.send({ embeds: [goodbyeEmbed] }).catch(() => {
-            console.log(`Couldn't send DM to ${member.user.tag}`);
-        });
-
-        // Log unboost event
-        await Logger.log('MEMBER_UNBOOSTED', {
+        // Log boost end
+        await Logger.log('BOOST', {
             guildId: member.guild.id,
             type: 'BOOST_END',
             userId: member.id,
-            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            timestamp: '2025-01-15 10:04:15'
         });
 
     } catch (error) {
