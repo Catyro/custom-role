@@ -1,64 +1,53 @@
-require('dotenv').config();
-const { PermissionFlagsBits } = require('discord.js');
-
 module.exports = {
-    // Bot Configuration (mengambil dari .env)
-    DISCORD_TOKEN: process.env.DISCORD_TOKEN,
-    DISCORD_CLIENT_ID: process.env.DISCORD_CLIENT_ID,
-    DISCORD_GUILD_ID: process.env.DISCORD_GUILD_ID,
+    TOKEN: process.env.TOKEN,
+    CLIENT_ID: process.env.CLIENT_ID,
+    DEVELOPER: 'Catyro',
     
-    // Bot Settings
-    BOT_PREFIX: '!',
-    TIMEZONE: process.env.TZ || 'Asia/Jakarta',
+    // Timezone settings
+    TIMEZONE: 'Asia/Jakarta',
+    TIME_FORMAT: 'DD/MM/YYYY HH:mm:ss',
     
-    // Embed Colors
-    EMBED_COLORS: {
-        DEFAULT: '#0099ff',
-        ERROR: '#ff0000',
-        SUCCESS: '#00ff00',
-        WARNING: '#ffff00',
-        INFO: '#00ffff'
-    },
-
-    // Logging Configuration    
-    LOG_CHANNEL: process.env.LOG_CHANNEL || '',
-    DEBUG_MODE: process.env.NODE_ENV !== 'production',
-
-    // Bot Required Permissions
-    BOT_PERMISSIONS: [
-        PermissionFlagsBits.ManageRoles,
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.EmbedLinks,
-        PermissionFlagsBits.UseExternalEmojis,
-        PermissionFlagsBits.AddReactions,
-        PermissionFlagsBits.ManageMessages, // Tambahan untuk menghapus pesan
-        PermissionFlagsBits.AttachFiles     // Tambahan untuk upload gambar
-    ],
-
-    // Custom Role Settings
+    // Role limits
     ROLE_LIMITS: {
-        MAX_ROLES_PER_USER: 3,
+        MAX_ROLES_PER_USER: 1,
         MAX_ROLES_PER_GUILD: 50,
-        MAX_NAME_LENGTH: 100,
-        MAX_ICON_SIZE: 256 * 1024, // 256KB in bytes
-        ALLOWED_IMAGE_TYPES: ['image/png', 'image/jpeg', 'image/jpg'],
-        MIN_NAME_LENGTH: 2
+        MAX_NAME_LENGTH: 32,
+        MAX_ICON_SIZE: 256000, // 256KB
+        DEFAULT_TEST_DURATION: 300000 // 5 minutes
     },
-
-    // Cooldown Settings (in milliseconds)
+    
+    // Cooldowns (in milliseconds)
     COOLDOWNS: {
         CREATE_ROLE: 300000,  // 5 minutes
         EDIT_ROLE: 60000,     // 1 minute
-        TEST_ROLE: 300000,    // 5 minutes
-        default: 3000,        // 3 seconds
-        BOOST_CHECK: 86400000 // 24 hours
+        TEST_ROLE: 300000     // 5 minutes
+    },
+    
+    // Embed colors
+    EMBED_COLORS: {
+        PRIMARY: '#007bff',    // Biru
+        SUCCESS: '#28a745',    // Hijau
+        ERROR: '#dc3545',      // Merah
+        WARNING: '#ffc107',    // Kuning
+        INFO: '#17a2b8',       // Biru Muda
+        BOOST: '#ff73fa'       // Pink Discord Nitro
     },
 
-    // Data Paths
-    PATHS: {
-        ROLES: './data/roles.json',
-        LOGS: './data/logs.json',
-        CONFIG: './data/config.json'
+    // Emoji custom
+    EMOJIS: {
+        SUCCESS: '✅',
+        ERROR: '❌',
+        WARNING: '⚠️',
+        INFO: 'ℹ️',
+        LOADING: '🔄',
+        BOOST: '🚀',
+        ROLE: '👑',
+        SETTINGS: '⚙️',
+        LOGS: '📜',
+        CHANNEL: '📌',
+        LIST: '📋',
+        NEXT: '➡️',
+        PREV: '⬅️',
+        CLOSE: '❌'
     }
 };

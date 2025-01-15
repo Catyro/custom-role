@@ -1,6 +1,9 @@
 const { 
-    SlashCommandBuilder,
-    PermissionFlagsBits 
+    SlashCommandBuilder, 
+    ButtonBuilder, 
+    ActionRowBuilder, 
+    ButtonStyle,
+    PermissionFlagsBits
 } = require('discord.js');
 const EmbedService = require('../utils/embed-builder');
 const Logger = require('../utils/logger');
@@ -10,34 +13,65 @@ const moment = require('moment-timezone');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('settings')
-        .setDescription('Manage bot settings')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('view')
-                .setDescription('View current bot settings'))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('reset')
-                .setDescription('Reset bot settings to default')),
+        .setDescription('Pengaturan bot Custom Role')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
         try {
-            const subcommand = interaction.options.getSubcommand();
+            // Create main menu buttons
+            const buttons = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('view_logs')
+                        .setLabel('📜 Lihat Logs')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('set_log_channel')
+                        .setLabel('📌 Set Channel Log')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('list_roles')
+                        .setLabel('👑 List Role')
+                        .setStyle(ButtonStyle.Primary)
+                );
 
-            switch (subcommand) {
-                case 'view':
-                    await handleViewSettings(interaction);
-                    break;
-                case 'reset':
-                    await handleResetSettings(interaction);
-                    break;
-            }
+            // Create settings embed
+            const settingsEmbed = EmbedService.createEmbed({
+                title: '⚙️ Pengaturan Bot Custom Role',
+                description: 'Silahkan pilih menu yang tersedia di bawah ini:',
+                fields: [
+                    {
+                        name: '📜 Lihat Logs',
+                        value: 'Melihat riwayat aktivitas bot',
+                        inline: true
+                    },
+                    {
+                        name: '📌 Set Channel Log',
+                        value: 'Mengatur channel untuk log bot',
+                        inline: true
+                    },
+                    {
+                        name: '👑 List Role',
+                        value: 'Melihat daftar custom role',
+                        inline: true
+                    }
+                ],
+                footer: {
+                    text: `Requested by ${interaction.user.tag}`
+                },
+                timestamp: true,
+                color: config.EMBED_COLORS.PRIMARY
+            });
+
+            await interaction.reply({
+                embeds: [settingsEmbed],
+                components: [buttons],
+                ephemeral: true
+            });
 
             // Log command usage
             await Logger.log('COMMAND', {
-                type: 'SETTINGS',
-                subcommand: subcommand,
+                type: 'SETTINGS_OPENED',
                 userId: interaction.user.id,
                 guildId: interaction.guild.id,
                 timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
@@ -55,69 +89,9 @@ module.exports = {
             });
 
             await interaction.reply({
-                content: '❌ An error occurred while managing settings.',
+                content: '❌ Terjadi kesalahan saat membuka pengaturan.',
                 ephemeral: true
             });
         }
     }
 };
-
-async function handleViewSettings(interaction) {
-    const settings = {
-        maxRolesPerUser: config.ROLE_LIMITS.MAX_ROLES_PER_USER,
-        maxRolesPerGuild: config.ROLE_LIMITS.MAX_ROLES_PER_GUILD,
-        maxNameLength: config.ROLE_LIMITS.MAX_NAME_LENGTH,
-        maxIconSize: `${config.ROLE_LIMITS.MAX_ICON_SIZE / 1024}KB`,
-        cooldowns: {
-            createRole: `${config.COOLDOWNS.CREATE_ROLE / 1000} seconds`,
-            editRole: `${config.COOLDOWNS.EDIT_ROLE / 1000} seconds`,
-            testRole: `${config.COOLDOWNS.TEST_ROLE / 1000} seconds`
-        }
-    };
-
-    await interaction.reply({
-        embeds: [
-            EmbedService.createEmbed({
-                title: '⚙️ Bot Settings',
-                fields: [
-                    {
-                        name: 'Role Limits',
-                        value: [
-                            `Max Roles per User: ${settings.maxRolesPerUser}`,
-                            `Max Roles per Guild: ${settings.maxRolesPerGuild}`,
-                            `Max Name Length: ${settings.maxNameLength}`,
-                            `Max Icon Size: ${settings.maxIconSize}`
-                        ].join('\n'),
-                        inline: false
-                    },
-                    {
-                        name: 'Cooldowns',
-                        value: [
-                            `Create Role: ${settings.cooldowns.createRole}`,
-                            `Edit Role: ${settings.cooldowns.editRole}`,
-                            `Test Role: ${settings.cooldowns.testRole}`
-                        ].join('\n'),
-                        inline: false
-                    }
-                ],
-                color: config.EMBED_COLORS.INFO,
-                timestamp: true
-            })
-        ],
-        ephemeral: true
-    });
-}
-
-async function handleResetSettings(interaction) {
-    await interaction.reply({
-        embeds: [
-            EmbedService.createEmbed({
-                title: '⚠️ Reset Settings',
-                description: 'Settings have been reset to default values.',
-                color: config.EMBED_COLORS.SUCCESS,
-                timestamp: true
-            })
-        ],
-        ephemeral: true
-    });
-}

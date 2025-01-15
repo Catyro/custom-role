@@ -1,74 +1,66 @@
 const { 
     SlashCommandBuilder, 
-    EmbedBuilder 
+    ButtonBuilder, 
+    ActionRowBuilder, 
+    ButtonStyle 
 } = require('discord.js');
-const moment = require('moment-timezone');
-const config = require('../config');
+const EmbedService = require('../utils/embed-builder');
 const Logger = require('../utils/logger');
+const config = require('../config');
+const moment = require('moment-timezone');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('boost-leaderboard')
-        .setDescription('Shows the server boost leaderboard'),
+        .setDescription('Menampilkan daftar booster server'),
 
     async execute(interaction) {
         try {
-            await interaction.deferReply();
-
-            // Get all boosters
-            const boosters = interaction.guild.members.cache
+            // Get all boosters and sort by boost date
+            const boosters = await interaction.guild.members.cache
                 .filter(member => member.premiumSince)
-                .sort((a, b) => a.premiumSinceTimestamp - b.premiumSinceTimestamp);
+                .sort((a, b) => a.premiumSince - b.premiumSince);
 
-            if (!boosters.size) {
-                return await interaction.editReply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(config.EMBED_COLORS.INFO)
-                            .setTitle('📊 Server Boost Leaderboard')
-                            .setDescription('No active boosters found!')
-                            .setTimestamp()
-                    ]
-                });
-            }
-
-            // Create leaderboard
-            const leaderboardEntries = boosters.map((member, index) => {
-                const boostDuration = moment.duration(Date.now() - member.premiumSinceTimestamp);
-                const months = boostDuration.months();
-                const days = boostDuration.days();
-                
-                return `${index + 1}. ${member.user.tag}\n` +
-                       `├ Since: ${moment(member.premiumSince).tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm')}\n` +
-                       `└ Duration: ${months ? `${months} months ` : ''}${days} days`;
+            // Create leaderboard embed
+            const leaderboardEmbed = EmbedService.createEmbed({
+                title: `${config.EMOJIS.BOOST} Boost Leaderboard - ${interaction.guild.name}`,
+                description: boosters.size ? 
+                    `Total Booster: ${boosters.size} member\n\n${
+                        Array.from(boosters.values())
+                            .map((member, index) => 
+                                `\`${(index + 1).toString().padStart(2, '0')}.\` <@${member.id}>\n┗━ Boost sejak: ${moment(member.premiumSince).tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')}`
+                            ).join('\n\n')
+                    }` : 
+                    'Belum ada member yang boost server ini.',
+                thumbnail: interaction.guild.iconURL({ dynamic: true }),
+                color: config.EMBED_COLORS.BOOST,
+                footer: {
+                    text: `Requested by ${interaction.user.tag}`,
+                    iconURL: interaction.user.displayAvatarURL({ dynamic: true })
+                },
+                timestamp: true
             });
 
-            // Split into pages if needed (10 entries per page)
-            const pages = [];
-            for (let i = 0; i < leaderboardEntries.length; i += 10) {
-                pages.push(leaderboardEntries.slice(i, i + 10));
-            }
+            // Create close button
+            const closeButton = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('close_leaderboard')
+                        .setLabel('❌ Tutup')
+                        .setStyle(ButtonStyle.Danger)
+                );
 
-            const embed = new EmbedBuilder()
-                .setColor(config.EMBED_COLORS.DEFAULT)
-                .setTitle('📊 Server Boost Leaderboard')
-                .setDescription([
-                    `Total Boosters: ${boosters.size}`,
-                    `Server Level: ${interaction.guild.premiumTier}`,
-                    `Boost Count: ${interaction.guild.premiumSubscriptionCount}`,
-                    '\n**Top Boosters:**\n',
-                    pages[0].join('\n\n')
-                ].join('\n'))
-                .setFooter({ text: `Page 1/${pages.length}` })
-                .setTimestamp();
-
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.reply({
+                embeds: [leaderboardEmbed],
+                components: [closeButton]
+            });
 
             // Log command usage
             await Logger.log('COMMAND', {
                 type: 'BOOST_LEADERBOARD',
                 userId: interaction.user.id,
                 guildId: interaction.guild.id,
+                boosterCount: boosters.size,
                 timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
 
@@ -83,8 +75,8 @@ module.exports = {
                 timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
 
-            await interaction.editReply({
-                content: '❌ An error occurred while fetching the leaderboard.',
+            await interaction.reply({
+                content: '❌ Terjadi kesalahan saat menampilkan leaderboard.',
                 ephemeral: true
             });
         }

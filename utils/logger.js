@@ -4,101 +4,92 @@ const moment = require('moment-timezone');
 const config = require('../config');
 
 class Logger {
-    static async log(type, data) {
+    static async log(category, data) {
         try {
-            // Add timestamp if not present
-            if (!data.timestamp) {
-                data.timestamp = moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
-            }
+            const timestamp = moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+            const logDate = moment().tz('Asia/Jakarta').format('YYYY-MM-DD');
+            const logDir = path.join(__dirname, '../logs');
+            const logFile = path.join(logDir, `${logDate}.json`);
 
-            const logEntry = {
-                type,
-                ...data,
-                loggedAt: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            };
+            // Create logs directory if it doesn't exist
+            await fs.mkdir(logDir, { recursive: true });
 
-            // Read existing logs
-            const logsPath = path.join(__dirname, '..', 'data', 'logs.json');
+            // Read existing logs or create new array
             let logs = [];
-            
             try {
-                const fileContent = await fs.readFile(logsPath, 'utf8');
+                const fileContent = await fs.readFile(logFile, 'utf-8');
                 logs = JSON.parse(fileContent);
             } catch (error) {
-                // If file doesn't exist or is invalid, start with empty array
-                console.warn('Creating new logs file');
+                // File doesn't exist or is invalid, start with empty array
             }
 
-            // Add new log
-            logs.push(logEntry);
+            // Add new log entry
+            logs.push({
+                timestamp,
+                category,
+                ...data
+            });
 
-            // Keep only last 1000 logs
-            if (logs.length > 1000) {
-                logs = logs.slice(-1000);
-            }
+            // Write updated logs
+            await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
 
-            // Write back to file
-            await fs.writeFile(logsPath, JSON.stringify(logs, null, 2));
-
-            // Console log in development
-            if (config.DEBUG_MODE) {
-                console.log(`[${type}] ${JSON.stringify(data, null, 2)}`);
-            }
+            // Cleanup old logs (older than 7 days)
+            await this.cleanupOldLogs();
 
         } catch (error) {
-            console.error('Error writing to log:', error);
+            console.error('Error writing log:', error);
         }
     }
 
-    static async getLogs(type = null, limit = 100) {
+    static async getLogs(guildId, limit = 10) {
         try {
-            const logsPath = path.join(__dirname, '..', 'data', 'logs.json');
-            const fileContent = await fs.readFile(logsPath, 'utf8');
-            let logs = JSON.parse(fileContent);
-
-            if (type) {
-                logs = logs.filter(log => log.type === type);
+            const logDir = path.join(__dirname, '../logs');
+            const files = await fs.readdir(logDir);
+            
+            // Get all log entries from the last 7 days
+            let allLogs = [];
+            for (const file of files) {
+                if (!file.endsWith('.json')) continue;
+                
+                const filePath = path.join(logDir, file);
+                const content = await fs.readFile(filePath, 'utf-8');
+                const logs = JSON.parse(content);
+                
+                // Filter logs for specific guild
+                const guildLogs = logs.filter(log => log.guildId === guildId);
+                allLogs.push(...guildLogs);
             }
 
-            return logs.slice(-limit);
+            // Sort by timestamp descending and limit
+            return allLogs
+                .sort((a, b) => moment(b.timestamp).valueOf() - moment(a.timestamp).valueOf())
+                .slice(0, limit);
+
         } catch (error) {
             console.error('Error reading logs:', error);
             return [];
         }
     }
 
-    static async rotateLogFiles() {
+    static async cleanupOldLogs() {
         try {
-            const logsPath = path.join(__dirname, '..', 'data', 'logs.json');
-            const backupPath = path.join(
-                __dirname, 
-                '..', 
-                'data', 
-                `logs_backup_${moment().tz('Asia/Jakarta').format('YYYY-MM-DD')}.json`
-            );
+            const logDir = path.join(__dirname, '../logs');
+            const files = await fs.readdir(logDir);
+            const now = moment();
 
-            // Check if logs file exists
-            try {
-                await fs.access(logsPath);
-            } catch {
-                // If no logs file exists, nothing to rotate
-                return;
+            for (const file of files) {
+                if (!file.endsWith('.json')) continue;
+
+                const filePath = path.join(logDir, file);
+                const fileDate = moment(file.replace('.json', ''));
+
+                // Delete files older than 7 days
+                if (now.diff(fileDate, 'days') > 7) {
+                    await fs.unlink(filePath);
+                }
             }
-
-            // Create backup
-            await fs.copyFile(logsPath, backupPath);
-
-            // Clear main logs file
-            await fs.writeFile(logsPath, JSON.stringify([], null, 2));
-
-            await this.log('SYSTEM', {
-                type: 'LOG_ROTATION',
-                message: `Logs rotated to ${backupPath}`,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-
         } catch (error) {
-            console.error('Error rotating logs:', error);
+            console.error('Error cleaning up logs:', error);
         }
     }
 }

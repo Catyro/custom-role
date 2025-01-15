@@ -1,170 +1,268 @@
-const fs = require('fs').promises;
-const path = require('path');
-const moment = require('moment-timezone');
+const { 
+    ModalBuilder, 
+    TextInputBuilder, 
+    TextInputStyle, 
+    ActionRowBuilder 
+} = require('discord.js');
 const Logger = require('./logger');
 const config = require('../config');
+const moment = require('moment-timezone');
 
 class RoleManager {
-    static async getRoleData(roleId) {
+    /**
+     * Membuat custom role untuk member
+     * @param {GuildMember} member - Member yang akan diberi role
+     * @param {Object} options - Opsi role
+     * @returns {Promise<Role>} Role yang dibuat
+     */
+    async createCustomRole(member, options) {
         try {
-            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
-            const fileContent = await fs.readFile(rolesPath, 'utf8');
-            const roles = JSON.parse(fileContent);
+            // Validate role name
+            const roleName = this.validateRoleName(options.name || `[Custom] ${member.user.username}`);
             
-            return roles.find(role => role.roleId === roleId);
+            // Validate role color
+            const roleColor = this.validateColor(options.color || config.EMBED_COLORS.PRIMARY);
+
+            // Create role
+            const role = await member.guild.roles.create({
+                name: roleName,
+                color: roleColor,
+                reason: `Custom role untuk ${member.user.tag}`,
+                permissions: []
+            });
+
+            // Assign role to member
+            await member.roles.add(role);
+
+            // Log role creation
+            await Logger.log('ROLE', {
+                type: 'ROLE_CREATED',
+                roleId: role.id,
+                userId: member.id,
+                guildId: member.guild.id,
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            });
+
+            return role;
+
         } catch (error) {
-            console.error('Error getting role data:', error);
-            return null;
+            console.error('Error creating custom role:', error);
+            throw error;
         }
     }
 
-    static async saveRole(roleData) {
+    /**
+     * Membuat role test
+     * @param {Guild} guild - Guild tempat role dibuat
+     * @param {Object} options - Opsi role test
+     * @returns {Promise<Role>} Role test yang dibuat
+     */
+    async createTestRole(guild, options) {
         try {
-            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
-            let roles = [];
+            const member = await guild.members.fetch(options.userId);
+            const duration = options.duration || config.ROLE_LIMITS.DEFAULT_TEST_DURATION;
 
-            try {
-                const fileContent = await fs.readFile(rolesPath, 'utf8');
-                roles = JSON.parse(fileContent);
-            } catch {
-                // If file doesn't exist, start with empty array
+            // Create temporary role
+            const role = await this.createCustomRole(member, {
+                name: `[Test] ${options.name || member.user.username}`,
+                color: options.color
+            });
+
+            // Set timeout to delete role
+            setTimeout(async () => {
+                try {
+                    await role.delete('Test role duration expired');
+                    await Logger.log('ROLE', {
+                        type: 'TEST_ROLE_EXPIRED',
+                        roleId: role.id,
+                        userId: member.id,
+                        guildId: guild.id,
+                        timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                    });
+                } catch (error) {
+                    console.error('Error deleting test role:', error);
+                }
+            }, duration);
+
+            return role;
+
+        } catch (error) {
+            console.error('Error creating test role:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Menampilkan modal edit role
+     * @param {Interaction} interaction - Interaction dari button
+     * @param {string} roleId - ID role yang akan diedit
+     */
+    async showEditModal(interaction, roleId) {
+        try {
+            const role = await interaction.guild.roles.fetch(roleId);
+            if (!role) throw new Error('Role tidak ditemukan');
+
+            const modal = new ModalBuilder()
+                .setCustomId(`edit_role_${roleId}`)
+                .setTitle('Edit Custom Role');
+
+            const nameInput = new TextInputBuilder()
+                .setCustomId('role_name')
+                .setLabel('Nama Role')
+                .setStyle(TextInputStyle.Short)
+                .setMaxLength(32)
+                .setValue(role.name)
+                .setRequired(true);
+
+            const colorInput = new TextInputBuilder()
+                .setCustomId('role_color')
+                .setLabel('Warna Role (HEX)')
+                .setStyle(TextInputStyle.Short)
+                .setMaxLength(7)
+                .setValue(role.hexColor)
+                .setRequired(true);
+
+            const iconInput = new TextInputBuilder()
+                .setCustomId('role_icon')
+                .setLabel('Icon Role URL (Opsional)')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(false);
+
+            const firstRow = new ActionRowBuilder().addComponents(nameInput);
+            const secondRow = new ActionRowBuilder().addComponents(colorInput);
+            const thirdRow = new ActionRowBuilder().addComponents(iconInput);
+
+            modal.addComponents(firstRow, secondRow, thirdRow);
+            await interaction.showModal(modal);
+
+        } catch (error) {
+            console.error('Error showing edit modal:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Mengedit role
+     * @param {Role} role - Role yang akan diedit
+     * @param {Object} options - Opsi edit role
+     */
+    async editRole(role, options) {
+        try {
+            const updateData = {};
+
+            if (options.name) {
+                updateData.name = this.validateRoleName(options.name);
             }
 
-            // Add new role
-            roles.push({
-                ...roleData,
-                createdAt: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
+            if (options.color) {
+                updateData.color = this.validateColor(options.color);
+            }
 
-            await fs.writeFile(rolesPath, JSON.stringify(roles, null, 2));
+            if (options.icon) {
+                updateData.icon = await this.validateIcon(options.icon);
+            }
+
+            await role.edit(updateData);
 
             await Logger.log('ROLE', {
-                type: 'ROLE_SAVE',
-                roleId: roleData.roleId,
-                userId: roleData.creatorId,
+                type: 'ROLE_EDITED',
+                roleId: role.id,
+                updates: Object.keys(updateData),
+                guildId: role.guild.id,
                 timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
 
-            return true;
         } catch (error) {
-            console.error('Error saving role:', error);
-            return false;
+            console.error('Error editing role:', error);
+            throw error;
         }
     }
 
-    static async updateRole(roleId, updates) {
+    /**
+     * Menghapus custom role
+     * @param {GuildMember} member - Member pemilik role
+     */
+    async removeCustomRole(member) {
         try {
-            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
-            const fileContent = await fs.readFile(rolesPath, 'utf8');
-            let roles = JSON.parse(fileContent);
+            const customRole = member.roles.cache.find(role => 
+                role.name.startsWith('[Custom]') || role.name.startsWith('[Test]')
+            );
 
-            const roleIndex = roles.findIndex(role => role.roleId === roleId);
-            if (roleIndex === -1) return false;
+            if (customRole) {
+                await customRole.delete('Boost ended or role removal requested');
+                await Logger.log('ROLE', {
+                    type: 'ROLE_REMOVED',
+                    roleId: customRole.id,
+                    userId: member.id,
+                    guildId: member.guild.id,
+                    timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                });
+            }
 
-            roles[roleIndex] = {
-                ...roles[roleIndex],
-                ...updates,
-                updatedAt: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            };
-
-            await fs.writeFile(rolesPath, JSON.stringify(roles, null, 2));
-
-            await Logger.log('ROLE', {
-                type: 'ROLE_UPDATE',
-                roleId,
-                updates,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-
-            return true;
         } catch (error) {
-            console.error('Error updating role:', error);
-            return false;
+            console.error('Error removing custom role:', error);
+            throw error;
         }
     }
 
-    static async deleteRole(roleId) {
-        try {
-            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
-            const fileContent = await fs.readFile(rolesPath, 'utf8');
-            let roles = JSON.parse(fileContent);
-
-            roles = roles.filter(role => role.roleId !== roleId);
-
-            await fs.writeFile(rolesPath, JSON.stringify(roles, null, 2));
-
-            await Logger.log('ROLE', {
-                type: 'ROLE_DELETE',
-                roleId,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-
-            return true;
-        } catch (error) {
-            console.error('Error deleting role:', error);
-            return false;
+    /**
+     * Validasi nama role
+     * @param {string} name - Nama role yang akan divalidasi
+     * @returns {string} Nama role yang valid
+     */
+    validateRoleName(name) {
+        if (!name || name.length < 1) {
+            throw new Error('Nama role tidak boleh kosong');
         }
-    }
 
-    static async getUserRoles(userId) {
-        try {
-            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
-            const fileContent = await fs.readFile(rolesPath, 'utf8');
-            const roles = JSON.parse(fileContent);
-
-            return roles.filter(role => role.creatorId === userId);
-        } catch (error) {
-            console.error('Error getting user roles:', error);
-            return [];
+        if (name.length > config.ROLE_LIMITS.MAX_NAME_LENGTH) {
+            throw new Error(`Nama role tidak boleh lebih dari ${config.ROLE_LIMITS.MAX_NAME_LENGTH} karakter`);
         }
+
+        // Remove unsafe characters
+        return name.replace(/[^\w\s\[\]\-]/g, '');
     }
 
-    static async clearUserRoles(userId) {
-        try {
-            const rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
-            const fileContent = await fs.readFile(rolesPath, 'utf8');
-            let roles = JSON.parse(fileContent);
-
-            roles = roles.filter(role => role.creatorId !== userId);
-
-            await fs.writeFile(rolesPath, JSON.stringify(roles, null, 2));
-
-            await Logger.log('ROLE', {
-                type: 'ROLES_CLEARED',
-                userId,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-
-            return true;
-        } catch (error) {
-            console.error('Error clearing user roles:', error);
-            return false;
+    /**
+     * Validasi warna role
+     * @param {string} color - Warna yang akan divalidasi
+     * @returns {string} Warna yang valid
+     */
+    validateColor(color) {
+        const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+        if (!hexRegex.test(color)) {
+            throw new Error('Format warna tidak valid (gunakan format HEX, contoh: #FF0000)');
         }
+        return color;
     }
 
-    // Validation methods
-    static isValidRoleName(name) {
-        return name.length >= 2 && name.length <= config.ROLE_LIMITS.MAX_NAME_LENGTH;
-    }
+    /**
+     * Validasi URL icon
+     * @param {string} url - URL icon yang akan divalidasi
+     * @returns {Promise<string>} URL yang valid
+     */
+    async validateIcon(url) {
+        if (!url) return null;
 
-    static isValidHexColor(color) {
-        return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color);
-    }
-
-    static async isValidImageUrl(url) {
         try {
             const response = await fetch(url);
             const contentType = response.headers.get('content-type');
             const contentLength = response.headers.get('content-length');
 
-            return (
-                contentType.startsWith('image/') &&
-                parseInt(contentLength) <= config.ROLE_LIMITS.MAX_ICON_SIZE
-            );
-        } catch {
-            return false;
+            if (!contentType.startsWith('image/')) {
+                throw new Error('URL harus mengarah ke file gambar');
+            }
+
+            if (contentLength > config.ROLE_LIMITS.MAX_ICON_SIZE) {
+                throw new Error(`Ukuran icon tidak boleh lebih dari ${config.ROLE_LIMITS.MAX_ICON_SIZE / 1024}KB`);
+            }
+
+            return url;
+
+        } catch (error) {
+            throw new Error('URL icon tidak valid');
         }
     }
 }
 
-module.exports = RoleManager;
+module.exports = new RoleManager();

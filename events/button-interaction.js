@@ -1,132 +1,172 @@
 const { 
-    Events, 
     ButtonBuilder, 
     ActionRowBuilder, 
-    ButtonStyle,
-    ModalBuilder, 
-    TextInputBuilder, 
-    TextInputStyle 
+    ButtonStyle 
 } = require('discord.js');
 const EmbedService = require('../utils/embed-builder');
-const RoleManager = require('../utils/role-manager');
 const Logger = require('../utils/logger');
-const Validator = require('../utils/validator');
 const config = require('../config');
 const moment = require('moment-timezone');
 
-module.exports = {
-    name: Events.InteractionCreate,
-    async execute(interaction) {
-        if (!interaction.isButton()) return;
+// ... kode lainnya ...
 
-        try {
-            const [action, roleId] = interaction.customId.split('_');
+async function handleSettingsButtons(interaction) {
+    const buttonId = interaction.customId;
+    const page = parseInt(interaction.customId.split('_')[2]) || 1;
 
-            switch(action) {
-                case 'edit':
-                    await handleEditRole(interaction, roleId);
-                    break;
-                case 'delete':
-                    await handleDeleteRole(interaction, roleId);
-                    break;
-                default:
-                    await interaction.reply({
-                        content: '❌ Invalid button action!',
-                        ephemeral: true
-                    });
-            }
-        } catch (error) {
-            console.error('Button interaction error:', error);
-            await Logger.log('ERROR', {
-                type: 'BUTTON_INTERACTION',
-                error: error.message,
-                userId: interaction.user.id,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+    // Navigation buttons
+    const navigationButtons = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('settings_back')
+                .setLabel('↩️ Kembali')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('settings_close')
+                .setLabel('❌ Tutup')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+    switch (buttonId) {
+        case 'view_logs':
+            const logs = await Logger.getLogs(interaction.guild.id, 10);
+            const logsEmbed = EmbedService.createEmbed({
+                title: '📜 Riwayat Log',
+                description: logs.length ? logs.map(log => 
+                    `\`${moment(log.timestamp).format('DD/MM HH:mm:ss')}\` ${log.type}: ${log.description}`
+                ).join('\n') : 'Tidak ada log yang tersedia.',
+                color: config.EMBED_COLORS.INFO,
+                footer: { text: 'Menampilkan 10 log terakhir' }
             });
 
-            await interaction.reply({
-                content: '❌ An error occurred while processing your request.',
+            await interaction.update({
+                embeds: [logsEmbed],
+                components: [navigationButtons]
+            });
+            break;
+
+        case 'set_log_channel':
+            const channelSelectRow = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('settings_select_channel')
+                        .setLabel('📌 Pilih Channel')
+                        .setStyle(ButtonStyle.Primary)
+                );
+
+            const channelEmbed = EmbedService.createEmbed({
+                title: '📌 Pengaturan Channel Log',
+                description: 'Klik tombol di bawah untuk memilih channel yang akan digunakan sebagai log bot.',
+                color: config.EMBED_COLORS.INFO
+            });
+
+            await interaction.update({
+                embeds: [channelEmbed],
+                components: [channelSelectRow, navigationButtons]
+            });
+            break;
+
+        case 'list_roles':
+            const roles = await getRolesList(interaction.guild, page);
+            const maxPage = Math.ceil(roles.total / 10);
+
+            const rolesEmbed = EmbedService.createEmbed({
+                title: '👑 Daftar Custom Role',
+                description: roles.items.length ? 
+                    roles.items.map((role, i) => 
+                        `${i + 1 + (page - 1) * 10}. ${role.toString()} - <@${role.members.first()?.id || 'Tidak ada'}>`
+                    ).join('\n') : 
+                    'Tidak ada custom role yang aktif.',
+                color: config.EMBED_COLORS.PRIMARY,
+                footer: { text: `Halaman ${page}/${maxPage || 1}` }
+            });
+
+            const roleButtons = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`settings_roles_${page - 1}`)
+                        .setLabel('⬅️ Sebelumnya')
+                        .setStyle(ButtonStyle.Secondary)
+                        .setDisabled(page <= 1),
+                    new ButtonBuilder()
+                        .setCustomId(`settings_roles_${page + 1}`)
+                        .setLabel('➡️ Selanjutnya')
+                        .setStyle(ButtonStyle.Secondary)
+                        .setDisabled(page >= maxPage)
+                );
+
+            await interaction.update({
+                embeds: [rolesEmbed],
+                components: [roleButtons, navigationButtons]
+            });
+            break;
+
+        case 'settings_back':
+            // Kembali ke menu utama
+            const mainButtons = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('view_logs')
+                        .setLabel('📜 Lihat Logs')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('set_log_channel')
+                        .setLabel('📌 Set Channel Log')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('list_roles')
+                        .setLabel('👑 List Role')
+                        .setStyle(ButtonStyle.Primary)
+                );
+
+            const mainEmbed = EmbedService.createEmbed({
+                title: '⚙️ Pengaturan Bot Custom Role',
+                description: 'Silahkan pilih menu yang tersedia di bawah ini:',
+                fields: [
+                    {
+                        name: '📜 Lihat Logs',
+                        value: 'Melihat riwayat aktivitas bot',
+                        inline: true
+                    },
+                    {
+                        name: '📌 Set Channel Log',
+                        value: 'Mengatur channel untuk log bot',
+                        inline: true
+                    },
+                    {
+                        name: '👑 List Role',
+                        value: 'Melihat daftar custom role',
+                        inline: true
+                    }
+                ],
+                color: config.EMBED_COLORS.PRIMARY
+            });
+
+            await interaction.update({
+                embeds: [mainEmbed],
+                components: [mainButtons]
+            });
+            break;
+
+        case 'settings_close':
+            await interaction.update({
+                content: '✅ Menu pengaturan ditutup.',
+                embeds: [],
+                components: [],
                 ephemeral: true
             });
-        }
+            break;
     }
-};
-
-async function handleEditRole(interaction, roleId) {
-    const role = await interaction.guild.roles.fetch(roleId);
-    if (!role) {
-        return await interaction.reply({
-            content: '❌ Role not found!',
-            ephemeral: true
-        });
-    }
-
-    const modal = new ModalBuilder()
-        .setCustomId(`edit_role_${roleId}`)
-        .setTitle('Edit Custom Role');
-
-    const nameInput = new TextInputBuilder()
-        .setCustomId('name')
-        .setLabel('New Role Name')
-        .setStyle(TextInputStyle.Short)
-        .setMinLength(2)
-        .setMaxLength(100)
-        .setPlaceholder('Enter new role name...')
-        .setValue(role.name)
-        .setRequired(true);
-
-    const colorInput = new TextInputBuilder()
-        .setCustomId('color')
-        .setLabel('New Role Color (hex)')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('#FF0000')
-        .setValue(role.hexColor)
-        .setRequired(true);
-
-    const iconInput = new TextInputBuilder()
-        .setCustomId('icon')
-        .setLabel('New Role Icon URL')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('https://example.com/icon.png')
-        .setRequired(false);
-
-    const firstRow = new ActionRowBuilder().addComponents(nameInput);
-    const secondRow = new ActionRowBuilder().addComponents(colorInput);
-    const thirdRow = new ActionRowBuilder().addComponents(iconInput);
-
-    modal.addComponents(firstRow, secondRow, thirdRow);
-    await interaction.showModal(modal);
 }
 
-async function handleDeleteRole(interaction, roleId) {
-    const role = await interaction.guild.roles.fetch(roleId);
-    if (!role) {
-        return await interaction.reply({
-            content: '❌ Role not found!',
-            ephemeral: true
-        });
-    }
+async function getRolesList(guild, page = 1) {
+    const customRoles = guild.roles.cache
+        .filter(role => role.name.startsWith('[Custom]'))
+        .sort((a, b) => b.position - a.position);
 
-    const confirmRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`confirm_delete_${roleId}`)
-            .setLabel('Confirm Delete')
-            .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-            .setCustomId(`cancel_delete_${roleId}`)
-            .setLabel('Cancel')
-            .setStyle(ButtonStyle.Secondary)
-    );
-
-    await interaction.reply({
-        embeds: [
-            EmbedService.createEmbed({
-                title: '⚠️ Confirm Role Deletion',
-                description: `Are you sure you want to delete the role **${role.name}**?\nThis action cannot be undone!`,
-                color: config.EMBED_COLORS.WARNING
-            })
-        ],
-        components: [confirmRow],
-        ephemeral: true
-    });
+    return {
+        items: Array.from(customRoles.values())
+            .slice((page - 1) * 10, page * 10),
+        total: customRoles.size
+    };
 }

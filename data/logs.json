@@ -246,5 +246,74 @@
     "user": "svbside.",
     "channelId": "1271038764956782675",
     "channelName": "📂・log-moderation"
+  },
+  {
+    "type": "BOT_STARTUP",
+    "botTag": "TESSS#5317",
+    "totalServers": 2,
+    "totalUsers": 2110,
+    "totalCommands": 4,
+    "startupTime": "2025-01-15 03:31:04",
+    "startedBy": "Catyro",
+    "timestamp": "2025-01-15 03:31:04",
+    "loggedAt": "2025-01-15 03:31:04"
+  },
+  {
+    "type": "GUILD_INFO",
+    "id": "827470522304167946",
+    "name": "GAY GM",
+    "members": 8,
+    "channels": 8,
+    "roles": 9,
+    "timestamp": "2025-01-15 03:31:04",
+    "loggedAt": "2025-01-15 03:31:04"
+  },
+  {
+    "type": "GUILD_INFO",
+    "id": "1239032367327219782",
+    "name": "Rest Area | #RestN'Joy",
+    "members": 2102,
+    "channels": 105,
+    "roles": 158,
+    "timestamp": "2025-01-15 03:31:04",
+    "loggedAt": "2025-01-15 03:31:04"
+  },
+  {
+    "type": "BOT_STARTUP",
+    "botTag": "TESSS#5317",
+    "totalServers": 2,
+    "totalUsers": 2110,
+    "totalCommands": 4,
+    "startupTime": "2025-01-15 03:45:41",
+    "startedBy": "Catyro",
+    "timestamp": "2025-01-15 03:45:41",
+    "loggedAt": "2025-01-15 03:45:41"
+  },
+  {
+    "type": "GUILD_INFO",
+    "id": "827470522304167946",
+    "name": "GAY GM",
+    "members": 8,
+    "channels": 8,
+    "roles": 9,
+    "timestamp": "2025-01-15 03:45:41",
+    "loggedAt": "2025-01-15 03:45:41"
+  },
+  {
+    "type": "GUILD_INFO",
+    "id": "1239032367327219782",
+    "name": "Rest Area | #RestN'Joy",
+    "members": 2102,
+    "channels": 105,
+    "roles": 158,
+    "timestamp": "2025-01-15 03:45:41",
+    "loggedAt": "2025-01-15 03:45:41"
+  },
+  {
+    "type": "NEW_BOOST",
+    "userId": "974670798591758400",
+    "guildId": "1239032367327219782",
+    "timestamp": "2025-01-15 06:52:52",
+    "loggedAt": "2025-01-15 06:52:52"
   }
 ]
