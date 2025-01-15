@@ -1,14 +1,22 @@
+require('dotenv').config();
 const { 
     Client, 
     Collection, 
     GatewayIntentBits, 
-    ActivityType 
+    ActivityType,
+    REST,
+    Routes 
 } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const config = require('./config');
 const Logger = require('./utils/logger');
 const moment = require('moment-timezone');
+
+// Validasi environment variables
+if (!process.env.DISCORD_TOKEN) {
+    console.error('❌ Token bot tidak ditemukan di file .env');
+    process.exit(1);
+}
 
 const client = new Client({
     intents: [
@@ -26,6 +34,7 @@ client.cooldowns = new Collection();
 client.roleMenus = new Collection();
 
 // Load Commands
+const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
@@ -34,7 +43,29 @@ for (const file of commandFiles) {
     const command = require(filePath);
     if ('data' in command && 'execute' in command) {
         client.commands.set(command.data.name, command);
+        commands.push(command.data.toJSON());
         console.log(`📥 Loaded command: ${command.data.name}`);
+    }
+}
+
+// Deploy Commands Function
+async function deployCommands() {
+    try {
+        console.log(`📝 Memulai refresh ${commands.length} application (/) commands.`);
+
+        const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+        const data = await rest.put(
+            Routes.applicationGuildCommands(
+                process.env.DISCORD_CLIENT_ID, 
+                process.env.DISCORD_GUILD_ID
+            ),
+            { body: commands }
+        );
+
+        console.log(`✅ Berhasil reload ${data.length} application (/) commands.`);
+    } catch (error) {
+        console.error('❌ Error saat deploy commands:', error);
     }
 }
 
@@ -55,6 +86,9 @@ for (const file of eventFiles) {
 
 // Ready Event
 client.once('ready', async () => {
+    // Deploy commands when bot starts
+    await deployCommands();
+
     // Set bot status
     client.user.setPresence({
         activities: [{
@@ -63,9 +97,6 @@ client.once('ready', async () => {
         }],
         status: 'online'
     });
-
-    // Get total users across all guilds
-    const totalUsers = client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
 
     console.log(`
 ╔═══════════════════════════════════════════════════════════════════╗
@@ -76,7 +107,7 @@ client.once('ready', async () => {
 ║ • Versi: 1.0.0                                                    
 ║ • Commands: ${client.commands.size}                               
 ║ • Waktu: ${moment().tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')} 
-║ • Developer: ${config.DEVELOPER}                                  
+║ • Developer: Catyro                                              
 ╚═══════════════════════════════════════════════════════════════════╝
     `);
 
@@ -85,10 +116,10 @@ client.once('ready', async () => {
         type: 'BOT_STARTUP',
         botTag: client.user.tag,
         totalServers: client.guilds.cache.size,
-        totalUsers: totalUsers,
+        totalUsers: client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0),
         totalCommands: client.commands.size,
         startupTime: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss'),
-        startedBy: config.DEVELOPER
+        startedBy: 'Catyro'
     });
 
     // Log guild information
@@ -97,22 +128,33 @@ client.once('ready', async () => {
    ├ Members: ${guild.memberCount}
    ├ Channels: ${guild.channels.cache.size}
    └ Roles: ${guild.roles.cache.size}`);
-
-        await Logger.log('SYSTEM', {
-            type: 'GUILD_INFO',
-            id: guild.id,
-            name: guild.name,
-            members: guild.memberCount,
-            channels: guild.channels.cache.size,
-            roles: guild.roles.cache.size,
-            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-        });
     });
+});
+
+// Handle Interactions
+client.on('interactionCreate', async interaction => {
+    try {
+        if (interaction.isChatInputCommand()) {
+            const command = client.commands.get(interaction.commandName);
+            if (!command) return;
+
+            await command.execute(interaction);
+        }
+    } catch (error) {
+        console.error('❌ Error handling interaction:', error);
+        const errorMessage = 'Terjadi kesalahan saat menjalankan command!';
+        
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: errorMessage, ephemeral: true });
+        } else {
+            await interaction.reply({ content: errorMessage, ephemeral: true });
+        }
+    }
 });
 
 // Error handling
 process.on('unhandledRejection', async error => {
-    console.error('Unhandled promise rejection:', error);
+    console.error('❌ Unhandled promise rejection:', error);
     await Logger.log('ERROR', {
         type: 'UNHANDLED_REJECTION',
         error: error.message,
@@ -121,5 +163,15 @@ process.on('unhandledRejection', async error => {
     });
 });
 
-// Login
-client.login(config.TOKEN);
+// Login dengan error handling yang lebih detail
+client.login(process.env.DISCORD_TOKEN)
+    .then(() => {
+        console.log('✅ Bot berhasil login!');
+    })
+    .catch(error => {
+        console.error('❌ Gagal login:', error.message);
+        if (error.code === 'TokenInvalid') {
+            console.error('Token tidak valid! Periksa kembali token di file .env');
+        }
+        process.exit(1);
+    });
