@@ -1,10 +1,8 @@
-const { testRoleSubmit } = require('../commands/test-custom-role');
 const { PermissionFlagsBits } = require('discord.js');
 const EmbedBuilder = require('../utils/embed-builder');
 const RoleManager = require('../utils/role-manager');
 const Validator = require('../utils/validator');
 const Logger = require('../utils/logger');
-const moment = require('moment');
 
 module.exports = {
     name: 'interactionCreate',
@@ -12,7 +10,9 @@ module.exports = {
         if (!interaction.isModalSubmit()) return;
 
         try {
-            switch(interaction.customId) {
+            const modalId = interaction.customId;
+
+            switch(modalId) {
                 case 'test_role_modal':
                     await handleTestRoleModal(interaction);
                     break;
@@ -21,14 +21,18 @@ module.exports = {
                     await handleEditRoleModal(interaction);
                     break;
 
+                case 'set_channel_modal':
+                    await handleSetChannelModal(interaction);
+                    break;
+
                 default:
-                    console.warn(`Unknown modal submission: ${interaction.customId}`);
+                    console.warn(`Unknown modal submission: ${modalId}`);
                     await Logger.log('ERROR', {
                         guildId: interaction.guild.id,
                         type: 'UNKNOWN_MODAL',
-                        modalId: interaction.customId,
+                        modalId: modalId,
                         userId: interaction.user.id,
-                        timestamp: '2025-01-15 08:35:37'
+                        timestamp: '2025-01-15 09:02:00'
                     });
             }
         } catch (error) {
@@ -47,7 +51,7 @@ module.exports = {
                 error: error.message,
                 modalId: interaction.customId,
                 userId: interaction.user.id,
-                timestamp: '2025-01-15 08:35:37'
+                timestamp: '2025-01-15 09:02:00'
             });
         }
     }
@@ -66,7 +70,7 @@ async function handleTestRoleModal(interaction) {
     const colorInput = interaction.fields.getTextInputValue('color_input');
 
     // Validate user input
-    const userId = Validator.validateUserInput(userInput);
+    const userId = await Validator.validateUserInput(interaction.client, userInput);
     if (!userId) {
         return await interaction.reply({
             content: '❌ Format username/ID tidak valid.',
@@ -103,7 +107,7 @@ async function handleTestRoleModal(interaction) {
         // Create test role
         const role = await RoleManager.createTestRole(interaction.guild, {
             userId: user.id,
-            name: 'Terimakasih sudah boost Server kami',
+            name: '[TEST] Terimakasih sudah boost Server kami',
             color: validColor
         });
 
@@ -113,7 +117,7 @@ async function handleTestRoleModal(interaction) {
         // Create success embed
         const successEmbed = new EmbedBuilder()
             .setTestRole('Role Test Diberikan',
-                '[TEST] Terimakasih sudah boost Server kami')
+                `Role test telah diberikan kepada ${user.toString()}!`)
             .addFields([
                 { name: '👤 User', value: user.toString(), inline: true },
                 { name: '🎨 Role', value: role.toString(), inline: true },
@@ -121,22 +125,22 @@ async function handleTestRoleModal(interaction) {
             ])
             .setTimestamp();
 
-        // Add icon upload button
-        const row = new ActionRowBuilder()
+        // Create buttons for icon options
+        const buttons = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
                     .setCustomId(`upload_icon_${role.id}`)
-                    .setLabel('Upload Icon')
+                    .setLabel('🖼️ Upload Icon')
                     .setStyle(ButtonStyle.Primary),
                 new ButtonBuilder()
                     .setCustomId(`skip_icon_${role.id}`)
-                    .setLabel('Lewati')
+                    .setLabel('⏩ Lewati')
                     .setStyle(ButtonStyle.Secondary)
             );
 
         await interaction.reply({
             embeds: [successEmbed],
-            components: [row],
+            components: [buttons],
             ephemeral: true
         });
 
@@ -168,7 +172,7 @@ async function handleTestRoleModal(interaction) {
                     type: 'TEST_ROLE_EXPIRE',
                     userId: user.id,
                     roleId: role.id,
-                    timestamp: '2025-01-15 08:40:08'
+                    timestamp: '2025-01-15 09:04:36'
                 });
 
                 // Send expiration DM
@@ -186,65 +190,50 @@ async function handleTestRoleModal(interaction) {
     }
 }
 
-async function handleEditRoleModal(interaction) {
-    // Check permissions
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
-        return await interaction.reply({
-            content: '❌ Kamu tidak memiliki izin untuk menggunakan fitur ini.',
-            ephemeral: true
-        });
-    }
-
-    const roleId = interaction.customId.split('_')[2];
-    const role = await interaction.guild.roles.fetch(roleId);
-
-    if (!role) {
-        return await interaction.reply({
-            content: '❌ Role tidak ditemukan.',
-            ephemeral: true
-        });
-    }
-
-    const nameInput = interaction.fields.getTextInputValue('name_input');
-    const colorInput = interaction.fields.getTextInputValue('color_input');
-
-    // Validate inputs
-    const nameValidation = Validator.validateRoleName(nameInput);
-    if (!nameValidation.isValid) {
-        return await interaction.reply({
-            content: `❌ ${nameValidation.message}`,
-            ephemeral: true
-        });
-    }
-
-    const validColor = Validator.validateColor(colorInput);
-    if (!validColor) {
-        return await interaction.reply({
-            content: '❌ Format warna tidak valid. Gunakan kode HEX (#FF0000) atau nama warna (RED).',
-            ephemeral: true
-        });
-    }
+async function handleSetChannelModal(interaction) {
+    const channelId = interaction.fields.getTextInputValue('channel_id');
 
     try {
-        // Update role
-        const updatedRole = await RoleManager.updateRole(role, {
-            name: nameInput,
-            color: validColor,
-            updatedBy: interaction.user.id
-        });
+        const channel = await interaction.guild.channels.fetch(channelId);
+        if (!channel) {
+            return await interaction.reply({
+                content: '❌ Channel tidak ditemukan.',
+                ephemeral: true
+            });
+        }
+
+        // Save channel to config
+        await Logger.setLogChannel(interaction.guild.id, channelId);
 
         const successEmbed = new EmbedBuilder()
-            .setSuccess('Role Diperbarui', 
-                `Role berhasil diperbarui:\n${updatedRole}`)
-            .addFields([
-                { name: 'Nama', value: nameInput, inline: true },
-                { name: 'Warna', value: validColor, inline: true }
-            ])
+            .setSuccess('Channel Log Diatur',
+                `Log channel telah diatur ke ${channel}`)
             .setTimestamp();
+
+        const buttons = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('settings_back')
+                    .setLabel('↩️ Kembali')
+                    .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId('settings_close')
+                    .setLabel('❌ Tutup')
+                    .setStyle(ButtonStyle.Danger)
+            );
 
         await interaction.reply({
             embeds: [successEmbed],
+            components: [buttons],
             ephemeral: true
+        });
+
+        await Logger.log('SETTINGS_UPDATE', {
+            guildId: interaction.guild.id,
+            type: 'LOG_CHANNEL_SET',
+            channelId: channelId,
+            userId: interaction.user.id,
+            timestamp: '2025-01-15 09:04:36'
         });
 
     } catch (error) {
