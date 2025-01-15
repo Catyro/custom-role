@@ -1,10 +1,12 @@
 const { 
-    ButtonBuilder, 
-    ButtonStyle, 
+    ModalBuilder, 
+    TextInputBuilder, 
+    TextInputStyle, 
     ActionRowBuilder,
-    PermissionFlagsBits 
+    ButtonBuilder,
+    ButtonStyle
 } = require('discord.js');
-const EmbedBuilder = require('../utils/embed-builder');
+const CustomEmbedBuilder = require('../utils/embed-builder');
 const RoleManager = require('../utils/role-manager');
 const Logger = require('../utils/logger');
 
@@ -14,247 +16,324 @@ module.exports = {
         if (!interaction.isButton()) return;
 
         try {
-            const buttonId = interaction.customId;
-
-            // Handle settings menu buttons
-            if (buttonId.startsWith('settings_')) {
-                if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
-                    return await interaction.reply({
-                        content: '❌ Kamu tidak memiliki izin untuk menggunakan menu ini.',
-                        ephemeral: true
-                    });
-                }
-            }
-
-            // Split button ID for dynamic handling
-            const [action, command, ...params] = buttonId.split('_');
+            const [action, roleId] = interaction.customId.split('_');
 
             switch(action) {
-                case 'boost':
-                    await handleBoostButtons(interaction, command, params);
+                case 'upload':
+                    if (interaction.customId.includes('icon')) {
+                        await handleIconUpload(interaction, roleId);
+                    }
+                    break;
+
+                case 'skip':
+                    if (interaction.customId.includes('icon')) {
+                        await handleSkipIcon(interaction, roleId);
+                    }
                     break;
 
                 case 'settings':
-                    await handleSettingsButtons(interaction, command, params);
-                    break;
-
-                case 'role':
-                    await handleRoleButtons(interaction, command, params);
-                    break;
-
-                case 'upload':
-                case 'skip':
-                    await handleIconButtons(interaction, action, params);
+                    await handleSettingsButton(interaction);
                     break;
 
                 default:
-                    console.warn(`Unknown button interaction: ${buttonId}`);
+                    console.warn(`Unknown button interaction: ${interaction.customId}`);
                     await Logger.log('ERROR', {
                         guildId: interaction.guild.id,
                         type: 'UNKNOWN_BUTTON',
-                        buttonId: buttonId,
+                        buttonId: interaction.customId,
                         userId: interaction.user.id,
-                        timestamp: '2025-01-15 08:58:51'
+                        timestamp: '2025-01-15 10:12:40'
                     });
             }
-
         } catch (error) {
             console.error('Error handling button interaction:', error);
             
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({
-                    content: '❌ Terjadi kesalahan saat memproses tombol.',
-                    ephemeral: true
-                });
-            }
+            await interaction.reply({
+                embeds: [
+                    new CustomEmbedBuilder()
+                        .setError('Error', 'Terjadi kesalahan saat memproses interaksi.')
+                ],
+                ephemeral: true
+            });
 
             await Logger.log('ERROR', {
                 guildId: interaction.guild.id,
-                type: 'BUTTON_INTERACTION_ERROR',
+                type: 'BUTTON_ERROR',
                 error: error.message,
                 buttonId: interaction.customId,
                 userId: interaction.user.id,
-                timestamp: '2025-01-15 08:58:51'
+                timestamp: '2025-01-15 10:12:40'
             });
         }
     }
 };
 
-async function handleSettingsButtons(interaction, command, params) {
-    switch(command) {
-        case 'logs':
-            await handleViewLogs(interaction);
-            break;
-
-        case 'refresh':
-            await handleRefreshLogs(interaction);
-            break;
-
-        case 'back':
-            await handleBackToMenu(interaction);
-            break;
-
-        case 'close':
-            await handleCloseMenu(interaction);
-            break;
-
-        case 'channel':
-            await handleSetChannel(interaction);
-            break;
-
-        case 'roles':
-            await handleListRoles(interaction);
-            break;
+async function handleIconUpload(interaction, roleId) {
+    const role = await interaction.guild.roles.fetch(roleId);
+    if (!role) {
+        return await interaction.reply({
+            embeds: [
+                new CustomEmbedBuilder()
+                    .setError('Role Tidak Ditemukan', 'Role tidak ditemukan.')
+            ],
+            ephemeral: true
+        });
     }
-}
 
-async function handleViewLogs(interaction) {
-    const logs = await Logger.getFormattedLogs(interaction.guild.id, 15);
-    
-    const logsEmbed = new EmbedBuilder()
-        .setTitle('📜 Riwayat Log')
-        .setDescription(logs.length ? 
-            logs.map(log => `${log.emoji} \`${log.timestamp}\` ${log.message}`).join('\n\n') :
-            'Belum ada log yang tercatat.')
-        .setColor(0x007bff);
-
-    const buttons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('settings_back')
-                .setLabel('↩️ Kembali')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('settings_refresh')
-                .setLabel('🔄 Refresh')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('settings_close')
-                .setLabel('❌ Tutup')
-                .setStyle(ButtonStyle.Danger)
-        );
+    const uploadEmbed = new CustomEmbedBuilder()
+        .setInfo('Upload Icon', 
+            '🖼️ Kirim URL gambar untuk icon role\n\n' +
+            '**Ketentuan:**\n' +
+            '• Format: PNG atau JPG\n' +
+            '• Ukuran maksimal: 256KB\n' +
+            '• Resolusi yang disarankan: 128x128 pixel');
 
     await interaction.update({
-        embeds: [logsEmbed],
-        components: [buttons]
-    });
-
-    await Logger.log('BUTTON_CLICK', {
-        guildId: interaction.guild.id,
-        type: 'VIEW_LOGS',
-        userId: interaction.user.id,
-        timestamp: '2025-01-15 08:58:51'
-    });
-}
-
-async function handleBackToMenu(interaction) {
-    const settingsEmbed = new EmbedBuilder()
-        .setCustom('⚙️', 'Pengaturan Bot', 
-            'Pilih menu di bawah ini untuk mengatur bot:', 0x007bff);
-
-    const mainButtons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('settings_logs')
-                .setLabel('📜 Riwayat Log')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('settings_channel')
-                .setLabel('📌 Set Channel')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('settings_roles')
-                .setLabel('👑 Custom Roles')
-                .setStyle(ButtonStyle.Primary)
-        );
-
-    const closeButton = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('settings_close')
-                .setLabel('❌ Tutup')
-                .setStyle(ButtonStyle.Danger)
-        );
-
-    await interaction.update({
-        embeds: [settingsEmbed],
-        components: [mainButtons, closeButton]
-    });
-}
-
-async function handleCloseMenu(interaction) {
-    await interaction.update({
-        content: '✅ Menu ditutup',
-        embeds: [],
+        embeds: [uploadEmbed],
         components: []
     });
 
-    // Delete message after 3 seconds
-    setTimeout(() => {
-        if (interaction.message && !interaction.message.deleted) {
-            interaction.message.delete().catch(() => {});
+    // Create message collector
+    const filter = m => m.author.id === interaction.user.id;
+    const collector = interaction.channel.createMessageCollector({ 
+        filter, 
+        max: 1,
+        time: 60000 
+    });
+
+    collector.on('collect', async message => {
+        const url = message.content;
+        message.delete().catch(() => {});
+
+        try {
+            await role.setIcon(url);
+
+            const successEmbed = new CustomEmbedBuilder()
+                .setSuccess('Icon Diperbarui',
+                    `✅ Icon untuk role ${role} berhasil diperbarui!`);
+
+            await interaction.editReply({
+                embeds: [successEmbed],
+                components: []
+            });
+
+            await Logger.log('ROLE_UPDATE', {
+                guildId: interaction.guild.id,
+                type: 'ROLE_ICON_UPDATE',
+                roleId: role.id,
+                updatedBy: interaction.user.id,
+                timestamp: '2025-01-15 10:12:40'
+            });
+
+        } catch (error) {
+            const errorEmbed = new CustomEmbedBuilder()
+                .setError('Upload Gagal',
+                    '❌ Gagal mengupload icon. Pastikan:\n' +
+                    '• URL valid dan dapat diakses\n' +
+                    '• Format file PNG atau JPG\n' +
+                    '• Ukuran file maksimal 256KB');
+
+            await interaction.editReply({
+                embeds: [errorEmbed],
+                components: []
+            });
+
+            await Logger.log('ERROR', {
+                guildId: interaction.guild.id,
+                type: 'ROLE_ICON_ERROR',
+                roleId: role.id,
+                error: error.message,
+                timestamp: '2025-01-15 10:12:40'
+            });
         }
-    }, 3000);
+    });
+
+    collector.on('end', collected => {
+        if (collected.size === 0) {
+            const timeoutEmbed = new CustomEmbedBuilder()
+                .setWarning('Waktu Habis',
+                    '⏰ Waktu upload icon telah habis.');
+
+            interaction.editReply({
+                embeds: [timeoutEmbed],
+                components: []
+            });
+        }
+    });
 }
 
-async function handleListRoles(interaction) {
-    const roles = await RoleManager.getCustomRoles(interaction.guild);
-    
-    const rolesEmbed = new EmbedBuilder()
-        .setTitle('👑 Daftar Custom Role')
-        .setDescription(roles.length ? 
-            roles.map(role => `${role.toString()} • ${role.members.size} member(s)`).join('\n\n') :
-            'Belum ada custom role yang dibuat.')
-        .setColor(0x007bff)
-        .setFooter({ 
-            text: `Total: ${roles.length} role`,
-            iconURL: interaction.guild.iconURL({ dynamic: true })
+async function handleSkipIcon(interaction, roleId) {
+    const role = await interaction.guild.roles.fetch(roleId);
+    if (!role) {
+        return await interaction.reply({
+            embeds: [
+                new CustomEmbedBuilder()
+                    .setError('Role Tidak Ditemukan', 'Role tidak ditemukan.')
+            ],
+            ephemeral: true
         });
+    }
 
-    const buttons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('settings_back')
-                .setLabel('↩️ Kembali')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('settings_roles_refresh')
-                .setLabel('🔄 Refresh')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('settings_close')
-                .setLabel('❌ Tutup')
-                .setStyle(ButtonStyle.Danger)
-        );
+    const successEmbed = new CustomEmbedBuilder()
+        .setSuccess('Setup Selesai',
+            '✅ Setup role test telah selesai!\n' +
+            'Role akan otomatis dihapus sesuai durasi yang ditentukan.');
 
     await interaction.update({
-        embeds: [rolesEmbed],
-        components: [buttons]
+        embeds: [successEmbed],
+        components: []
+    });
+
+    await Logger.log('TEST_ROLE_SKIP_ICON', {
+        guildId: interaction.guild.id,
+        type: 'TEST_ROLE_SKIP_ICON',
+        roleId: role.id,
+        userId: interaction.user.id,
+        timestamp: '2025-01-15 10:12:40'
     });
 }
 
-async function handleSetChannel(interaction) {
-    // Implementation for set channel
-    // This will be handled by the modal submit event
-    await interaction.showModal({
-        title: 'Set Channel Log',
-        custom_id: 'set_channel_modal',
-        components: [
-            {
-                type: 1,
-                components: [
-                    {
-                        type: 4,
-                        custom_id: 'channel_id',
-                        label: 'ID Channel',
-                        style: 1,
-                        min_length: 1,
-                        max_length: 20,
-                        placeholder: 'Masukkan ID channel',
-                        required: true
-                    }
-                ]
-            }
-        ]
-    });
+async function handleSettingsButton(interaction) {
+    const action = interaction.customId.split('_')[1];
+
+    switch(action) {
+        case 'back':
+            // Show main settings menu
+            const settingsEmbed = new CustomEmbedBuilder()
+                .setSettings('Pengaturan',
+                    'Pilih pengaturan yang ingin diubah:')
+                .addFields([
+                    { name: '📝 Log Channel', value: 'Channel untuk log aktivitas bot', inline: true },
+                    { name: '⚙️ Role Settings', value: 'Pengaturan role boost', inline: true },
+                    { name: '⏱️ Duration Settings', value: 'Pengaturan durasi default', inline: true }
+                ]);
+
+            const settingsButtons = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('settings_logs')
+                        .setLabel('📝 Log Channel')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('settings_roles')
+                        .setLabel('⚙️ Role Settings')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('settings_duration')
+                        .setLabel('⏱️ Duration')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('settings_close')
+                        .setLabel('❌ Tutup')
+                        .setStyle(ButtonStyle.Danger)
+                );
+
+            await interaction.update({
+                embeds: [settingsEmbed],
+                components: [settingsButtons]
+            });
+            break;
+
+        case 'close':
+            const closeEmbed = new CustomEmbedBuilder()
+                .setSuccess('Settings Ditutup', '✅ Menu pengaturan telah ditutup.');
+
+            await interaction.update({
+                embeds: [closeEmbed],
+                components: []
+            });
+            break;
+
+        case 'logs':
+            // Handle log channel settings
+            const logSettingsEmbed = new CustomEmbedBuilder()
+                .setSettings('Log Channel Settings', 
+                    'Atur channel untuk menyimpan log aktivitas bot.')
+                .addFields([
+                    { name: '📝 Current Log Channel', value: 'None', inline: true }
+                ]);
+
+            const logButtons = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('settings_set_log')
+                        .setLabel('Set Log Channel')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('settings_back')
+                        .setLabel('↩️ Kembali')
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+            await interaction.update({
+                embeds: [logSettingsEmbed],
+                components: [logButtons]
+            });
+            break;
+
+        case 'roles':
+            // Handle role settings
+            const roleSettingsEmbed = new CustomEmbedBuilder()
+                .setSettings('Role Settings',
+                    'Atur pengaturan untuk role boost.')
+                .addFields([
+                    { name: '🎨 Default Color', value: '#F47FFF', inline: true },
+                    { name: '⭐ Default Permissions', value: 'Send Messages, Read Messages', inline: true }
+                ]);
+
+            const roleButtons = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('settings_edit_role')
+                        .setLabel('Edit Default Settings')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('settings_back')
+                        .setLabel('↩️ Kembali')
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+            await interaction.update({
+                embeds: [roleSettingsEmbed],
+                components: [roleButtons]
+            });
+            break;
+
+        case 'duration':
+            // Handle duration settings
+            const durationSettingsEmbed = new CustomEmbedBuilder()
+                .setSettings('Duration Settings',
+                    'Atur durasi default untuk test role.')
+                .addFields([
+                    { name: '⏱️ Default Duration', value: '1 minute', inline: true },
+                    { name: '⌛ Maximum Duration', value: '24 hours', inline: true }
+                ]);
+
+            const durationButtons = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('settings_edit_duration')
+                        .setLabel('Edit Duration')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('settings_back')
+                        .setLabel('↩️ Kembali')
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+            await interaction.update({
+                embeds: [durationSettingsEmbed],
+                components: [durationButtons]
+            });
+            break;
+
+        default:
+            await Logger.log('ERROR', {
+                guildId: interaction.guild.id,
+                type: 'UNKNOWN_SETTINGS_BUTTON',
+                action: action,
+                userId: interaction.user.id,
+                timestamp: '2025-01-15 10:14:29'
+            });
+    }
 }
