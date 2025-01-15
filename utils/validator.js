@@ -2,7 +2,7 @@ const moment = require('moment');
 
 class Validator {
     /**
-     * Validates a hex color code
+     * Validates a hex color code or basic color name
      * @param {string} color - The color code to validate
      * @returns {boolean|string} False if invalid, normalized color if valid
      */
@@ -64,8 +64,8 @@ class Validator {
             return result;
         }
 
-        // Blacklisted words
-        const blacklistedWords = ['admin', 'mod', 'moderator', 'owner', 'staff', 'bot', 'webhook', 'system', 'everyone', 'here', 'kontol', 'memek', 'yatim', 'nazi', 'SERVANT', 'servant', 'SKIVY', 'skivy'];
+        // Blacklisted words (disesuaikan dengan kebutuhan server)
+        const blacklistedWords = ['admin', 'mod', 'moderator', 'owner', 'staff', 'bot', 'webhook'];
         
         if (blacklistedWords.some(word => name.toLowerCase().includes(word))) {
             result.message = 'Nama role mengandung kata yang tidak diizinkan.';
@@ -77,61 +77,126 @@ class Validator {
     }
 
     /**
-     * Validates an icon URL
-     * @param {string} url - The URL to validate
-     * @returns {boolean} Whether the URL is valid
+     * Validates duration input for test role
+     * @param {string} duration - Duration string (e.g., "30s", "5m", "2h")
+     * @returns {Object} Validation result with milliseconds if valid
      */
-    static validateIconUrl(url) {
-        if (!url || typeof url !== 'string') return false;
-
-        // Check URL format
-        try {
-            new URL(url);
-        } catch {
-            return false;
-        }
-
-        // Check file extension
-        const validExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
-        const hasValidExtension = validExtensions.some(ext => 
-            url.toLowerCase().endsWith(ext)
-        );
-
-        return hasValidExtension;
-    }
-
-    /**
-     * Validates user permissions
-     * @param {GuildMember} member - The member to check
-     * @param {Array<string>} requiredPermissions - Required permissions
-     * @returns {Object} Validation result with status and missing permissions
-     */
-    static validatePermissions(member, requiredPermissions) {
+    static validateDuration(duration) {
         const result = {
-            hasPermission: true,
-            missingPermissions: []
+            isValid: false,
+            milliseconds: 0,
+            message: ''
         };
 
-        if (!member || !requiredPermissions) {
-            result.hasPermission = false;
+        // Default duration: 1 minute
+        if (!duration) {
+            result.isValid = true;
+            result.milliseconds = 60 * 1000;
             return result;
         }
 
-        for (const permission of requiredPermissions) {
-            if (!member.permissions.has(permission)) {
-                result.hasPermission = false;
-                result.missingPermissions.push(permission);
+        if (typeof duration !== 'string') {
+            result.message = 'Durasi harus berupa text.';
+            return result;
+        }
+
+        const match = duration.match(/^(\d+)(s|m|h)$/);
+        if (!match) {
+            result.message = 'Format durasi tidak valid. Gunakan format: 30s, 45m, atau 2h';
+            return result;
+        }
+
+        const value = parseInt(match[1]);
+        const unit = match[2];
+
+        if (value <= 0) {
+            result.message = 'Durasi harus lebih dari 0.';
+            return result;
+        }
+
+        const maxDurations = {
+            's': 60,  // max 60 seconds
+            'm': 60,  // max 60 minutes
+            'h': 24   // max 24 hours
+        };
+
+        if (value > maxDurations[unit]) {
+            result.isValid = false;
+            result.message = `Maksimal durasi untuk ${unit} adalah ${maxDurations[unit]}${unit}`;
+            return result;
+        }
+
+        const multipliers = {
+            's': 1000,
+            'm': 60 * 1000,
+            'h': 60 * 60 * 1000
+        };
+
+        result.milliseconds = value * multipliers[unit];
+        result.isValid = true;
+        return result;
+    }
+
+    /**
+     * Validates user input (ID, mention, or username)
+     * @param {Client} client - Discord client instance
+     * @param {string} input - User input to validate
+     * @returns {string|false} Clean user ID if valid, false if invalid
+     */
+    static async validateUserInput(client, input) {
+        if (!input || typeof input !== 'string') return false;
+
+        // Remove mention formatting
+        const cleanId = input.replace(/[<@!>]/g, '');
+
+        // Check if it's a valid Discord ID
+        if (/^\d{17,19}$/.test(cleanId)) {
+            try {
+                await client.users.fetch(cleanId);
+                return cleanId;
+            } catch {
+                return false;
             }
         }
 
-        return result;
+        return false;
+    }
+
+    /**
+     * Validates an icon URL and file size
+     * @param {string} url - The URL to validate
+     * @returns {Promise<boolean>} Whether the URL and file size are valid
+     */
+    static async validateIconUrl(url) {
+        if (!url || typeof url !== 'string') return false;
+
+        try {
+            const urlObj = new URL(url);
+            
+            // Check file extension
+            const validExtensions = ['.png', '.jpg', '.jpeg', '.gif'];
+            if (!validExtensions.some(ext => urlObj.pathname.toLowerCase().endsWith(ext))) {
+                return false;
+            }
+
+            // Check file size (max 256KB)
+            const response = await fetch(url, { method: 'HEAD' });
+            const size = response.headers.get('content-length');
+            if (size > 256 * 1024) { // 256KB in bytes
+                return false;
+            }
+
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     /**
      * Validates channel permissions for bot
      * @param {GuildChannel} channel - The channel to check
      * @param {ClientUser} bot - The bot client user
-     * @returns {Object} Validation result with status and missing permissions
+     * @returns {Object} Validation result
      */
     static validateChannelPermissions(channel, bot) {
         const requiredPermissions = [
@@ -161,94 +226,6 @@ class Validator {
         }
 
         return result;
-    }
-
-    /**
-     * Validates a duration string (e.g., "2m", "1h")
-     * @param {string} duration - Duration string to validate
-     * @returns {Object} Validation result with milliseconds if valid
-     */
-    static validateDuration(duration) {
-        const result = {
-            isValid: false,
-            milliseconds: 0,
-            message: ''
-        };
-
-        if (!duration || typeof duration !== 'string') {
-            result.message = 'Durasi harus berupa text.';
-            return result;
-        }
-
-        const match = duration.match(/^(\d+)(m|h|d)$/);
-        if (!match) {
-            result.message = 'Format durasi tidak valid. Gunakan format: 2m, 1h, atau 1d';
-            return result;
-        }
-
-        const value = parseInt(match[1]);
-        const unit = match[2];
-
-        if (value <= 0) {
-            result.message = 'Durasi harus lebih dari 0.';
-            return result;
-        }
-
-        const multipliers = {
-            'm': 60 * 1000,        // minutes to milliseconds
-            'h': 60 * 60 * 1000,   // hours to milliseconds
-            'd': 24 * 60 * 60 * 1000 // days to milliseconds
-        };
-
-        result.milliseconds = value * multipliers[unit];
-        result.isValid = true;
-
-        // Add limits
-        const maxDurations = {
-            'm': 60,  // max 60 minutes
-            'h': 24,  // max 24 hours
-            'd': 7    // max 7 days
-        };
-
-        if (value > maxDurations[unit]) {
-            result.isValid = false;
-            result.message = `Maksimal durasi untuk ${unit} adalah ${maxDurations[unit]}${unit}`;
-            return result;
-        }
-
-        return result;
-    }
-
-    /**
-     * Validates and formats a timestamp
-     * @param {string|Date} timestamp - Timestamp to validate
-     * @returns {string|false} Formatted timestamp if valid, false if invalid
-     */
-    static validateTimestamp(timestamp) {
-        try {
-            const date = moment(timestamp);
-            if (!date.isValid()) return false;
-            return date.utc().format('YYYY-MM-DD HH:mm:ss');
-        } catch {
-            return false;
-        }
-    }
-
-    /**
-     * Validates a user ID or mention
-     * @param {string} input - User input to validate
-     * @returns {string|false} Clean user ID if valid, false if invalid
-     */
-    static validateUserInput(input) {
-        if (!input || typeof input !== 'string') return false;
-
-        // Remove mention formatting
-        const cleanId = input.replace(/[<@!>]/g, '');
-
-        // Check if it's a valid Discord ID
-        if (!/^\d{17,19}$/.test(cleanId)) return false;
-
-        return cleanId;
     }
 }
 
