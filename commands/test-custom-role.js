@@ -8,19 +8,24 @@ const {
     ButtonBuilder,
     ButtonStyle
 } = require('discord.js');
-const EmbedBuilder = require('../utils/embed-builder');
+const CustomEmbedBuilder = require('../utils/embed-builder');
 const RoleManager = require('../utils/role-manager');
+const Validator = require('../utils/validator');
 const Logger = require('../utils/logger');
-const moment = require('moment');
+const TimeFormatter = require('../utils/time-formatter');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('test-custom-role')
-        .setDescription('Coba custom role selama 2 menit')
+        .setDescription('Coba custom role dengan durasi kustom')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
         .addUserOption(option =>
             option.setName('user')
                 .setDescription('User yang akan diberikan test role')
+                .setRequired(false))
+        .addStringOption(option =>
+            option.setName('durasi')
+                .setDescription('Durasi test role (default: 1m)')
                 .setRequired(false)),
 
     async execute(interaction) {
@@ -28,27 +33,53 @@ module.exports = {
             // Check permissions
             if (!interaction.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
                 return await interaction.reply({
-                    content: '❌ Kamu tidak memiliki izin untuk menggunakan command ini.',
+                    embeds: [
+                        new CustomEmbedBuilder()
+                            .setError('Akses Ditolak', 
+                                'Kamu tidak memiliki izin untuk menggunakan command ini.')
+                    ],
                     ephemeral: true
                 });
             }
 
-            // Get target user if provided in command
+            // Get options
             const targetUser = interaction.options.getUser('user');
-            await showTestRoleForm(interaction, targetUser);
+            const durationInput = interaction.options.getString('durasi');
+
+            // Validate duration if provided
+            let duration = 60000; // Default: 1 minute
+            if (durationInput) {
+                const durationValidation = Validator.validateDuration(durationInput);
+                if (!durationValidation.isValid) {
+                    return await interaction.reply({
+                        embeds: [
+                            new CustomEmbedBuilder()
+                                .setError('Durasi Invalid', durationValidation.message)
+                        ],
+                        ephemeral: true
+                    });
+                }
+                duration = durationValidation.milliseconds;
+            }
+
+            await showTestRoleForm(interaction, targetUser, duration);
 
             await Logger.log('COMMAND_EXECUTE', {
                 guildId: interaction.guild.id,
                 type: 'TEST_ROLE_START',
                 userId: interaction.user.id,
                 targetId: targetUser?.id || null,
-                timestamp: '2025-01-15 09:09:46'
+                duration: TimeFormatter.formatDuration(duration),
+                timestamp: '2025-01-15 10:08:53'
             });
 
         } catch (error) {
             console.error('Error in test-custom-role command:', error);
             await interaction.reply({
-                content: '❌ Terjadi kesalahan saat membuat test role.',
+                embeds: [
+                    new CustomEmbedBuilder()
+                        .setError('Error', 'Terjadi kesalahan saat membuat test role.')
+                ],
                 ephemeral: true
             });
 
@@ -57,23 +88,23 @@ module.exports = {
                 type: 'TEST_ROLE_ERROR',
                 error: error.message,
                 userId: interaction.user.id,
-                timestamp: '2025-01-15 09:09:46'
+                timestamp: '2025-01-15 10:08:53'
             });
         }
     }
 };
 
-async function showTestRoleForm(interaction, targetUser = null) {
+async function showTestRoleForm(interaction, targetUser = null, duration = 60000) {
     const modal = new ModalBuilder()
-        .setCustomId('test_role_modal')
+        .setCustomId(`test_role_modal-${duration}`)
         .setTitle('[TEST] Custom Role Creator');
 
     // User Input Field
     const userInput = new TextInputBuilder()
         .setCustomId('user_input')
-        .setLabel('Username/ID')
+        .setLabel('Username/ID (@user, user, atau ID)')
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('@username, username, <@ID>, atau ID')
+        .setPlaceholder('Contoh: @username, username, atau ID')
         .setMinLength(2)
         .setMaxLength(100)
         .setRequired(true);
@@ -86,9 +117,9 @@ async function showTestRoleForm(interaction, targetUser = null) {
     // Color Input Field
     const colorInput = new TextInputBuilder()
         .setCustomId('color_input')
-        .setLabel('Warna Role')
+        .setLabel('Warna Role (#HEX atau nama warna)')
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('#HEX atau nama warna (contoh: #FF0000 atau RED)')
+        .setPlaceholder('Contoh: #FF0000 atau RED')
         .setMinLength(3)
         .setMaxLength(7)
         .setRequired(true);
@@ -100,8 +131,10 @@ async function showTestRoleForm(interaction, targetUser = null) {
     await interaction.showModal(modal);
 }
 
-// Modal Submit Handler
+// Modal Submit Handler - Test Role
 async function handleTestRoleSubmit(interaction) {
+    // Extract duration from modal ID
+    const duration = parseInt(interaction.customId.split('-')[1]) || 60000;
     const userInput = interaction.fields.getTextInputValue('user_input');
     const colorInput = interaction.fields.getTextInputValue('color_input');
 
@@ -111,10 +144,14 @@ async function handleTestRoleSubmit(interaction) {
         if (!user) return;
 
         // Validate color
-        const validColor = validateColor(colorInput);
+        const validColor = Validator.validateColor(colorInput);
         if (!validColor) {
             return await interaction.reply({
-                content: '❌ Format warna tidak valid. Gunakan kode HEX (#FF0000) atau nama warna (RED).',
+                embeds: [
+                    new CustomEmbedBuilder()
+                        .setError('Warna Invalid', 
+                            'Format warna tidak valid. Gunakan kode HEX (#FF0000) atau nama warna (RED).')
+                ],
                 ephemeral: true
             });
         }
@@ -127,7 +164,11 @@ async function handleTestRoleSubmit(interaction) {
         
         if (existingTestRole) {
             return await interaction.reply({
-                content: '❌ User sudah memiliki test role. Tunggu hingga role tersebut expired.',
+                embeds: [
+                    new CustomEmbedBuilder()
+                        .setError('Role Sudah Ada', 
+                            'User sudah memiliki test role. Tunggu hingga role tersebut expired.')
+                ],
                 ephemeral: true
             });
         }
@@ -135,23 +176,26 @@ async function handleTestRoleSubmit(interaction) {
         // Create test role
         const role = await RoleManager.createTestRole(interaction.guild, {
             userId: user.id,
-            name: '[TEST] Terimakasih sudah boost Server kami',
+            name: '[TEST] Custom Role',
             color: validColor
         });
 
         // Add role to member
         await member.roles.add(role);
 
+        const endTime = new Date(Date.now() + duration);
+
         // Create success embed
-        const successEmbed = new EmbedBuilder()
-            .setCustom('🎯', 'Role Test Diberikan', 
+        const successEmbed = new CustomEmbedBuilder()
+            .setTestRole('Role Test Diberikan', 
                 `Role test telah diberikan ke ${user}\n` +
-                `Role akan otomatis dihapus dalam 2 menit.`, 0x7289da)
+                `Role akan otomatis dihapus dalam ${TimeFormatter.formatDuration(duration)}.`)
             .addFields([
                 { name: '👤 User', value: user.toString(), inline: true },
-                { name: '🎨 Role', value: role.toString(), inline: true },
-                { name: '⏱️ Durasi', value: '2 menit', inline: true }
-            ]);
+                { name: '🎨 Role', value: role.toString(), inline: true }
+            ])
+            .addDurationField(duration)
+            .addRemainingTimeField(endTime);
 
         // Add icon upload button
         const buttons = new ActionRowBuilder()
@@ -173,14 +217,15 @@ async function handleTestRoleSubmit(interaction) {
         });
 
         // Send DM to target user
-        const dmEmbed = new EmbedBuilder()
-            .setCustom('🎯', 'Role Test Diterima', 
+        const dmEmbed = new CustomEmbedBuilder()
+            .setTestRole('[TEST] Terimakasih sudah boost Server kami', 
                 `Kamu menerima role test di server ${interaction.guild.name}!\n` +
-                `Role akan otomatis dihapus dalam 2 menit.`, 0x7289da)
+                `Role akan otomatis dihapus dalam ${TimeFormatter.formatDuration(duration)}.`)
             .addFields([
-                { name: '🎨 Role', value: role.toString(), inline: true },
-                { name: '⏱️ Durasi', value: '2 menit', inline: true }
-            ]);
+                { name: '🎨 Role', value: role.toString(), inline: true }
+            ])
+            .addDurationField(duration)
+            .addRemainingTimeField(endTime);
 
         await user.send({ embeds: [dmEmbed] }).catch(() => {
             console.log(`Couldn't send DM to ${user.tag}`);
@@ -193,7 +238,8 @@ async function handleTestRoleSubmit(interaction) {
             targetId: user.id,
             roleId: role.id,
             color: validColor,
-            timestamp: '2025-01-15 09:09:46'
+            duration: TimeFormatter.formatDuration(duration),
+            timestamp: '2025-01-15 10:08:53'
         });
 
         // Set timeout to delete role
@@ -209,23 +255,28 @@ async function handleTestRoleSubmit(interaction) {
                     type: 'TEST_ROLE_EXPIRE',
                     userId: user.id,
                     roleId: role.id,
-                    timestamp: '2025-01-15 09:09:46'
+                    timestamp: '2025-01-15 10:08:53'
                 });
 
                 // Send expiration DM
-                await user.send({
-                    content: `⌛ Role test kamu di server ${interaction.guild.name} telah berakhir.`
-                }).catch(() => {});
+                const expireEmbed = new CustomEmbedBuilder()
+                    .setInfo('Role Test Berakhir', 
+                        `Role test kamu di server ${interaction.guild.name} telah berakhir.`);
+
+                await user.send({ embeds: [expireEmbed] }).catch(() => {});
 
             } catch (error) {
                 console.error('Error removing test role:', error);
             }
-        }, 120000); // 2 minutes
+        }, duration);
 
     } catch (error) {
         console.error('Error in test role modal submit:', error);
         await interaction.reply({
-            content: '❌ Terjadi kesalahan saat membuat test role.',
+            embeds: [
+                new CustomEmbedBuilder()
+                    .setError('Error', 'Terjadi kesalahan saat membuat test role.')
+            ],
             ephemeral: true
         });
 
@@ -233,177 +284,39 @@ async function handleTestRoleSubmit(interaction) {
             guildId: interaction.guild.id,
             type: 'TEST_ROLE_MODAL_ERROR',
             error: error.message,
-            timestamp: '2025-01-15 09:09:46'
+            timestamp: '2025-01-15 10:08:53'
         });
     }
 }
 
 // Helper Functions
 async function validateAndGetUser(interaction, input) {
-    // Remove mention formatting
-    let userId = input.replace(/[<@!>]/g, '');
-    
-    try {
-        // Try to fetch user by ID first
-        return await interaction.client.users.fetch(userId);
-    } catch {
-        try {
-            // If ID fails, try to find by username
-            const member = await interaction.guild.members.cache.find(
-                m => m.user.username.toLowerCase() === input.toLowerCase() ||
-                     m.displayName.toLowerCase() === input.toLowerCase()
-            );
-            if (member) return member.user;
-        } catch (error) {
-            console.error('Error finding user:', error);
-        }
-
+    const userId = await Validator.validateUserInput(interaction.client, input);
+    if (!userId) {
         await interaction.reply({
-            content: '❌ User tidak ditemukan. Pastikan username atau ID valid.',
+            embeds: [
+                new CustomEmbedBuilder()
+                    .setError('User Invalid', 
+                        'Format username/ID tidak valid.')
+            ],
+            ephemeral: true
+        });
+        return null;
+    }
+
+    try {
+        return await interaction.client.users.fetch(userId);
+    } catch (error) {
+        await interaction.reply({
+            embeds: [
+                new CustomEmbedBuilder()
+                    .setError('User Tidak Ditemukan', 
+                        'User tidak ditemukan. Pastikan username atau ID valid.')
+            ],
             ephemeral: true
         });
         return null;
     }
 }
 
-function validateColor(color) {
-    // Check for hex code
-    if (color.startsWith('#')) {
-        return /^#[0-9A-F]{6}$/i.test(color) ? color : null;
-    }
-
-    // Check for basic colors
-    const basicColors = {
-        'RED': '#FF0000',
-        'GREEN': '#00FF00',
-        'BLUE': '#0000FF',
-        'YELLOW': '#FFFF00',
-        'PURPLE': '#800080',
-        'ORANGE': '#FFA500',
-        'BLACK': '#000000',
-        'WHITE': '#FFFFFF',
-        'PINK': '#FFC0CB'
-    };
-
-    const upperColor = color.toUpperCase();
-    return basicColors[upperColor] || null;
-}
-
-// Additional helper functions
-async function handleIconUpload(interaction, roleId) {
-    const role = await interaction.guild.roles.fetch(roleId);
-    if (!role) {
-        return await interaction.reply({
-            content: '❌ Role tidak ditemukan.',
-            ephemeral: true
-        });
-    }
-
-    const uploadEmbed = new EmbedBuilder()
-        .setCustom('🖼️', 'Upload Icon', 
-            'Kirim URL gambar untuk icon role.\n' +
-            'Format yang didukung: PNG, JPG, GIF\n' +
-            'Ukuran maksimal: 256KB', 0x7289da);
-
-    await interaction.update({
-        embeds: [uploadEmbed],
-        components: []
-    });
-
-    // Create message collector
-    const filter = m => m.author.id === interaction.user.id;
-    const collector = interaction.channel.createMessageCollector({ 
-        filter, 
-        max: 1,
-        time: 60000 
-    });
-
-    collector.on('collect', async message => {
-        const url = message.content;
-        message.delete().catch(() => {});
-
-        try {
-            await role.setIcon(url);
-
-            const successEmbed = new EmbedBuilder()
-                .setSuccess('Icon Diperbarui',
-                    `Icon untuk role ${role} berhasil diperbarui!`);
-
-            await interaction.editReply({
-                embeds: [successEmbed],
-                components: []
-            });
-
-            await Logger.log('ROLE_UPDATE', {
-                guildId: interaction.guild.id,
-                type: 'TEST_ROLE_ICON_UPDATE',
-                roleId: role.id,
-                updatedBy: interaction.user.id,
-                timestamp: '2025-01-15 09:11:57'
-            });
-
-        } catch (error) {
-            const errorEmbed = new EmbedBuilder()
-                .setError('Error',
-                    'Gagal mengupload icon. Pastikan URL valid dan format yang didukung.');
-
-            await interaction.editReply({
-                embeds: [errorEmbed],
-                components: []
-            });
-
-            await Logger.log('ERROR', {
-                guildId: interaction.guild.id,
-                type: 'TEST_ROLE_ICON_ERROR',
-                roleId: role.id,
-                error: error.message,
-                timestamp: '2025-01-15 09:11:57'
-            });
-        }
-    });
-
-    collector.on('end', collected => {
-        if (collected.size === 0) {
-            const timeoutEmbed = new EmbedBuilder()
-                .setError('Timeout',
-                    'Waktu upload icon telah habis.');
-
-            interaction.editReply({
-                embeds: [timeoutEmbed],
-                components: []
-            });
-        }
-    });
-}
-
-async function handleSkipIcon(interaction, roleId) {
-    const role = await interaction.guild.roles.fetch(roleId);
-    if (!role) {
-        return await interaction.reply({
-            content: '❌ Role tidak ditemukan.',
-            ephemeral: true
-        });
-    }
-
-    const successEmbed = new EmbedBuilder()
-        .setSuccess('Setup Selesai',
-            'Setup test role telah selesai!\n' +
-            'Role akan otomatis dihapus dalam 2 menit.');
-
-    await interaction.update({
-        embeds: [successEmbed],
-        components: []
-    });
-
-    await Logger.log('TEST_ROLE_SKIP_ICON', {
-        guildId: interaction.guild.id,
-        type: 'TEST_ROLE_SKIP_ICON',
-        roleId: role.id,
-        userId: interaction.user.id,
-        timestamp: '2025-01-15 09:11:57'
-    });
-}
-
 module.exports.handleTestRoleSubmit = handleTestRoleSubmit;
-module.exports.handleIconUpload = handleIconUpload;
-module.exports.handleSkipIcon = handleSkipIcon;
