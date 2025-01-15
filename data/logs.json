@@ -1,5 +1,201 @@
 [
   {
+    "id": "log_1736932538225_8z9ljw9wt",
+    "type": "UNKNOWN_BUTTON",
+    "guildId": "1239032367327219782",
+    "buttonId": "view_logs",
+    "userId": "1207290255305220108",
+    "timestamp": "2025-01-15 08:58:51"
+  },
+  {
+    "id": "log_1736932528843_wxnxhzpah",
+    "type": "SETTINGS",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108",
+    "timestamp": "2025-01-15 09:15:28"
+  },
+  {
+    "id": "log_1736932481567_sh46gu5x9",
+    "type": "BOT_STARTUP",
+    "botTag": "TESSS#5317",
+    "totalServers": 2,
+    "totalUsers": 2111,
+    "totalCommands": 4,
+    "startupTime": "2025-01-15 16:14:41",
+    "startedBy": "Catyro",
+    "timestamp": "2025-01-15 09:14:41"
+  },
+  {
+    "id": "log_1736932481171_rupumj59h",
+    "type": "STARTUP",
+    "botId": "1327258248159559680",
+    "username": "TESSS#5317",
+    "guilds": 2,
+    "timestamp": "2025-01-15 08:47:51"
+  },
+  {
+    "type": "TEST_ROLE_EXPIRED",
+    "timestamp": "2025-01-15 14:33:15",
+    "guildId": "1239032367327219782",
+    "roleId": "1328989713444372512",
+    "userId": "1207290255305220108"
+  },
+  {
+    "type": "TEST_ROLE_EXPIRED",
+    "timestamp": "2025-01-15 14:32:15",
+    "guildId": "1239032367327219782",
+    "roleId": "1328989502013833256",
+    "userId": "1207290255305220108"
+  },
+  {
+    "type": "TEST_ROLE_CREATED",
+    "timestamp": "2025-01-15 14:30:40",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108",
+    "targetId": "1207290255305220108",
+    "roleId": "1328989713444372512",
+    "duration": 2
+  },
+  {
+    "type": "TEST_ROLE_CREATE",
+    "timestamp": "2025-01-15 14:30:39",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108",
+    "roleId": "1328989713444372512",
+    "duration": 120000
+  },
+  {
+    "type": "TEST_ROLE_CREATED",
+    "timestamp": "2025-01-15 14:29:50",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108",
+    "targetId": "1207290255305220108",
+    "roleId": "1328989502013833256",
+    "duration": 1
+  },
+  {
+    "type": "TEST_ROLE_CREATE",
+    "timestamp": "2025-01-15 14:29:49",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108",
+    "roleId": "1328989502013833256",
+    "duration": 60000
+  },
+  {
+    "type": "SETTINGS_OPENED",
+    "timestamp": "2025-01-15 14:26:15",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108",
+    "command": "settings"
+  },
+  {
+    "type": "SETTINGS_OPENED",
+    "timestamp": "2025-01-15 14:22:24",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108",
+    "command": "settings"
+  },
+  {
+    "type": "BOT_STARTUP",
+    "timestamp": "2025-01-15 14:22:14",
+    "botTag": "TESSS#5317",
+    "totalServers": 2,
+    "totalUsers": 2110,
+    "totalCommands": 4,
+    "startupTime": "2025-01-15 14:22:14",
+    "startedBy": "Catyro"
+  },
+  {
+    "type": "STARTUP",
+    "timestamp": "2025-01-15 14:22:14",
+    "totalCommands": 4,
+    "version": "1.0.0"
+  },
+  {
+    "type": "SETTINGS_OPENED",
+    "timestamp": "2025-01-15 14:21:23",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108",
+    "command": "settings"
+  },
+  {
+    "type": "EDIT_ROLE_FAILED",
+    "timestamp": "2025-01-15 14:21:02",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108",
+    "reason": "NO_CUSTOM_ROLE"
+  },
+  {
+    "type": "BOOST_LEADERBOARD_CLOSED",
+    "timestamp": "2025-01-15 14:20:44",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108"
+  },
+  {
+    "type": "BOOST_LEADERBOARD",
+    "timestamp": "2025-01-15 14:19:23",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108"
+  },
+  {
+    "type": "SETTINGS_OPENED",
+    "timestamp": "2025-01-15 14:15:27",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108",
+    "command": "settings"
+  },
+  {
+    "type": "BOT_STARTUP",
+    "timestamp": "2025-01-15 14:15:14",
+    "botTag": "TESSS#5317",
+    "totalServers": 2,
+    "totalUsers": 2110,
+    "totalCommands": 4,
+    "startupTime": "2025-01-15 14:15:14",
+    "startedBy": "Catyro"
+  },
+  {
+    "type": "STARTUP",
+    "timestamp": "2025-01-15 14:15:14",
+    "totalCommands": 4,
+    "version": "1.0.0"
+  },
+  {
+    "type": "SETTINGS_OPENED",
+    "timestamp": "2025-01-15 14:14:32",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108",
+    "command": "settings"
+  },
+  {
+    "type": "BOOST_LEADERBOARD_CLOSED",
+    "timestamp": "2025-01-15 14:13:16",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108"
+  },
+  {
+    "type": "BOOST_LEADERBOARD",
+    "timestamp": "2025-01-15 14:09:48",
+    "guildId": "1239032367327219782",
+    "userId": "1207290255305220108"
+  },
+  {
+    "type": "BOT_STARTUP",
+    "timestamp": "2025-01-15 14:08:03",
+    "botTag": "TESSS#5317",
+    "totalServers": 2,
+    "totalUsers": 2110,
+    "totalCommands": 4,
+    "startupTime": "2025-01-15 14:08:03",
+    "startedBy": "Catyro"
+  },
+  {
+    "type": "STARTUP",
+    "timestamp": "2025-01-15 14:08:03",
+    "totalCommands": 4,
+    "version": "1.0.0"
+  },
+  {
     "type": "ERROR",
     "command": "back_to_settings",
     "userId": "1207290255305220108",
