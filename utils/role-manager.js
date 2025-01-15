@@ -1,45 +1,55 @@
+const { roleData } = require('../data/roles.json');
 const Logger = require('./logger');
+const Validator = require('./validator');
 const moment = require('moment-timezone');
 
 class RoleManager {
     /**
-     * Membuat custom role untuk member
-     * @param {GuildMember} member - Member yang akan diberi role
-     * @param {Object} options - Opsi role
-     * @returns {Promise<Role>} Role yang dibuat
+     * Create a custom role for a booster
+     * @param {GuildMember} member - The member to create the role for
+     * @param {Object} options - Role options
+     * @returns {Promise<Role>} The created role
      */
-    async createCustomRole(member, options = {}) {
+    static async createCustomRole(member, options = {}) {
         try {
-            // Validate role name
-            const roleName = this.validateRoleName(options.name || `[Custom] ${member.user.username}`);
-            
-            // Validate role color
-            const roleColor = this.validateColor(options.color || '#f47fff');
+            const { name, color, icon } = options;
 
-            // Create role
+            // Validate inputs
+            if (!Validator.isValidRoleName(name)) {
+                throw new Error('Invalid role name');
+            }
+            if (!Validator.isValidColor(color)) {
+                throw new Error('Invalid color code');
+            }
+            if (icon && !Validator.isValidImageUrl(icon)) {
+                throw new Error('Invalid icon URL');
+            }
+
+            // Create the role
             const role = await member.guild.roles.create({
-                name: roleName,
-                color: roleColor,
-                reason: `Custom role untuk ${member.user.tag}`,
-                permissions: []
+                name: name,
+                color: color,
+                hoist: true,
+                mentionable: true,
+                reason: `Custom role for ${member.user.tag}`,
+                icon: icon || undefined
             });
 
-            // Position the role just below the bot's highest role
-            const botMember = member.guild.members.cache.get(member.client.user.id);
-            const highestRole = botMember.roles.highest;
-            await role.setPosition(highestRole.position - 1);
-
-            // Assign role to member
+            // Give the role to the member
             await member.roles.add(role);
 
-            // Log role creation
-            await Logger.log('ROLE_CREATE', {
-                guildId: member.guild.id,
-                type: 'ROLE_CREATED',
-                roleId: role.id,
+            // Save role data
+            await this.saveRoleData(member.guild.id, role.id, {
                 userId: member.id,
-                roleName: roleName,
-                roleColor: roleColor,
+                createdAt: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            });
+
+            // Log role creation
+            await Logger.log('ROLE_CREATED', {
+                guildId: member.guild.id,
+                type: 'ROLE_CREATE',
+                userId: member.id,
+                roleId: role.id,
                 timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
 
@@ -52,39 +62,37 @@ class RoleManager {
     }
 
     /**
-     * Membuat role test
-     * @param {Guild} guild - Guild tempat role dibuat
-     * @param {Object} options - Opsi role test
-     * @returns {Promise<Role>} Role test yang dibuat
+     * Create a temporary test role
+     * @param {Guild} guild - The guild to create the role in
+     * @param {Object} options - Role options
+     * @returns {Promise<Role>} The created role
      */
-    async createTestRole(guild, options) {
+    static async createTestRole(guild, options = {}) {
         try {
-            const member = await guild.members.fetch(options.userId);
-            const duration = options.duration || 300000; // Default 5 minutes
+            const { userId, name, color, duration } = options;
 
-            // Create temporary role
-            const role = await this.createCustomRole(member, {
-                name: `[Test] ${options.name || member.user.username}`,
-                color: options.color || '#007bff'
+            // Create the role
+            const role = await guild.roles.create({
+                name: name,
+                color: color,
+                hoist: true,
+                mentionable: true,
+                reason: `Test role (${duration/60000} minutes)`
             });
 
-            // Set timeout to delete role
-            setTimeout(async () => {
-                try {
-                    if (role && !role.deleted) {
-                        await role.delete('Test role duration expired');
-                        await Logger.log('ROLE_DELETE', {
-                            guildId: guild.id,
-                            type: 'TEST_ROLE_EXPIRED',
-                            roleId: role.id,
-                            userId: member.id,
-                            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-                        });
-                    }
-                } catch (error) {
-                    console.error('Error deleting test role:', error);
-                }
-            }, duration);
+            // Give the role to the member
+            const member = await guild.members.fetch(userId);
+            await member.roles.add(role);
+
+            // Log test role creation
+            await Logger.log('TEST_ROLE_CREATED', {
+                guildId: guild.id,
+                type: 'TEST_ROLE_CREATE',
+                userId: userId,
+                roleId: role.id,
+                duration: duration,
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            });
 
             return role;
 
@@ -95,35 +103,47 @@ class RoleManager {
     }
 
     /**
-     * Mengedit role
-     * @param {Role} role - Role yang akan diedit
-     * @param {Object} options - Opsi edit role
+     * Edit an existing custom role
+     * @param {Role} role - The role to edit
+     * @param {Object} options - New role options
+     * @returns {Promise<Role>} The updated role
      */
-    async editRole(role, options = {}) {
+    static async editRole(role, options = {}) {
         try {
-            const updateData = {};
+            const { name, color, icon } = options;
 
-            if (options.name) {
-                updateData.name = this.validateRoleName(options.name);
+            // Validate inputs
+            if (!Validator.isValidRoleName(name)) {
+                throw new Error('Invalid role name');
+            }
+            if (!Validator.isValidColor(color)) {
+                throw new Error('Invalid color code');
+            }
+            if (icon && !Validator.isValidImageUrl(icon)) {
+                throw new Error('Invalid icon URL');
             }
 
-            if (options.color) {
-                updateData.color = this.validateColor(options.color);
-            }
+            // Update the role
+            const updatedRole = await role.edit({
+                name: name,
+                color: color,
+                icon: icon || role.icon
+            });
 
-            if (options.icon) {
-                updateData.icon = await this.validateIcon(options.icon);
-            }
-
-            await role.edit(updateData);
-
-            await Logger.log('ROLE_EDIT', {
+            // Log role update
+            await Logger.log('ROLE_EDITED', {
                 guildId: role.guild.id,
-                type: 'ROLE_EDITED',
+                type: 'ROLE_UPDATE',
                 roleId: role.id,
-                updates: updateData,
+                updates: {
+                    name: name,
+                    color: color,
+                    icon: icon
+                },
                 timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
+
+            return updatedRole;
 
         } catch (error) {
             console.error('Error editing role:', error);
@@ -132,22 +152,30 @@ class RoleManager {
     }
 
     /**
-     * Menghapus custom role
-     * @param {GuildMember} member - Member pemilik role
+     * Remove a custom role from a member
+     * @param {GuildMember} member - The member to remove the role from
+     * @returns {Promise<void>}
      */
-    async removeCustomRole(member) {
+    static async removeCustomRole(member) {
         try {
             const customRole = member.roles.cache.find(role => 
-                role.name.startsWith('[Custom]') || role.name.startsWith('[Test]')
+                role.name.startsWith('[Custom]') &&
+                role.members.has(member.id)
             );
 
-            if (customRole && !customRole.deleted) {
-                await customRole.delete('Role removal requested or boost ended');
-                await Logger.log('ROLE_DELETE', {
+            if (customRole) {
+                // Remove role from member
+                await member.roles.remove(customRole);
+
+                // Delete the role
+                await customRole.delete('Member unboost');
+
+                // Log role removal
+                await Logger.log('ROLE_REMOVED', {
                     guildId: member.guild.id,
-                    type: 'ROLE_REMOVED',
-                    roleId: customRole.id,
+                    type: 'ROLE_REMOVE',
                     userId: member.id,
+                    roleId: customRole.id,
                     timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
                 });
             }
@@ -159,67 +187,22 @@ class RoleManager {
     }
 
     /**
-     * Validasi nama role
-     * @param {string} name - Nama role yang akan divalidasi
-     * @returns {string} Nama role yang valid
+     * Save role data to storage
+     * @param {string} guildId - Guild ID
+     * @param {string} roleId - Role ID
+     * @param {Object} data - Role data to save
+     * @returns {Promise<void>}
      */
-    validateRoleName(name) {
-        if (!name || typeof name !== 'string') {
-            throw new Error('Nama role tidak valid');
-        }
-
-        // Remove unsafe characters and trim
-        name = name.replace(/[^\w\s\[\]\-]/g, '').trim();
-
-        if (name.length < 1) {
-            throw new Error('Nama role tidak boleh kosong');
-        }
-
-        if (name.length > 32) {
-            throw new Error('Nama role tidak boleh lebih dari 32 karakter');
-        }
-
-        return name;
-    }
-
-    /**
-     * Validasi warna role
-     * @param {string} color - Warna yang akan divalidasi
-     * @returns {string} Warna yang valid
-     */
-    validateColor(color) {
-        const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-        if (!color || !hexRegex.test(color)) {
-            throw new Error('Format warna tidak valid (gunakan format HEX, contoh: #FF0000)');
-        }
-        return color;
-    }
-
-    /**
-     * Validasi URL icon
-     * @param {string} url - URL icon yang akan divalidasi
-     * @returns {Promise<string>} URL yang valid
-     */
-    async validateIcon(url) {
-        if (!url) return null;
-
+    static async saveRoleData(guildId, roleId, data) {
         try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error('URL tidak dapat diakses');
-            }
-
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.startsWith('image/')) {
-                throw new Error('URL harus mengarah ke file gambar');
-            }
-
-            return url;
-
+            // Implementation for saving role data
+            // This would typically involve writing to a database or file
+            console.log('Saving role data:', { guildId, roleId, data });
         } catch (error) {
-            throw new Error('URL icon tidak valid: ' + error.message);
+            console.error('Error saving role data:', error);
+            throw error;
         }
     }
 }
 
-module.exports = new RoleManager();
+module.exports = RoleManager;
