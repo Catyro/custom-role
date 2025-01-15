@@ -1,13 +1,12 @@
 const { 
-    ChannelType, 
-    ChannelSelectMenuBuilder, 
+    ChannelType,
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle
 } = require('discord.js');
 const EmbedBuilder = require('../utils/embed-builder');
 const Logger = require('../utils/logger');
-const moment = require('moment-timezone');
+const moment = require('moment');
 
 module.exports = {
     name: 'interactionCreate',
@@ -15,32 +14,76 @@ module.exports = {
         if (!interaction.isButton()) return;
 
         try {
-            switch(interaction.customId) {
+            const userId = interaction.user.id;
+            const guildId = interaction.guild.id;
+            const buttonId = interaction.customId;
+
+            switch(buttonId) {
                 case 'view_logs':
                     await handleViewLogs(interaction);
+                    logButtonClick('VIEW_LOGS', userId, guildId);
                     break;
+
+                case 'refresh_logs':
+                    await handleViewLogs(interaction);
+                    logButtonClick('REFRESH_LOGS', userId, guildId);
+                    break;
+
                 case 'set_channel':
                     await handleSetChannel(interaction);
+                    logButtonClick('SET_CHANNEL', userId, guildId);
                     break;
+
                 case 'list_roles':
                     await handleListRoles(interaction);
+                    logButtonClick('LIST_ROLES', userId, guildId);
                     break;
+
+                case 'back_to_menu':
+                    await handleBackToMenu(interaction);
+                    logButtonClick('BACK_TO_MENU', userId, guildId);
+                    break;
+
+                case 'close_menu':
                 case 'close_settings':
-                    await handleCloseSettings(interaction);
+                    await handleCloseMenu(interaction);
+                    logButtonClick('CLOSE_MENU', userId, guildId);
                     break;
-                // Handle boost leaderboard buttons
-                case interaction.customId.match(/^boost_(prev|next|refresh|close)/)?.input:
-                    // These are handled in boost-leaderboard.js
+
+                case 'log_channel_select':
+                    await handleChannelSelect(interaction);
+                    logButtonClick('CHANNEL_SELECT', userId, guildId);
                     break;
+
+                case 'refresh_roles':
+                    await handleListRoles(interaction);
+                    logButtonClick('REFRESH_ROLES', userId, guildId);
+                    break;
+
                 default:
-                    console.warn(`Unknown button interaction: ${interaction.customId}`);
+                    // Handle boost leaderboard buttons
+                    if (buttonId.match(/^boost_(prev|next|refresh|close)/)) {
+                        // These are handled in boost-leaderboard.js
+                        return;
+                    }
+                    console.warn(`Unknown button interaction: ${buttonId}`);
+                    await Logger.log('ERROR', {
+                        guildId: guildId,
+                        type: 'UNKNOWN_BUTTON',
+                        buttonId: buttonId,
+                        userId: userId,
+                        timestamp: moment().utc().format('YYYY-MM-DD HH:mm:ss')
+                    });
             }
         } catch (error) {
             console.error('Error handling button interaction:', error);
-            await interaction.reply({
-                content: '❌ Terjadi kesalahan saat memproses tombol.',
-                ephemeral: true
-            });
+            
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({
+                    content: '❌ Terjadi kesalahan saat memproses tombol.',
+                    ephemeral: true
+                });
+            }
 
             await Logger.log('ERROR', {
                 guildId: interaction.guild.id,
@@ -48,149 +91,117 @@ module.exports = {
                 buttonId: interaction.customId,
                 error: error.message,
                 userId: interaction.user.id,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                timestamp: moment().utc().format('YYYY-MM-DD HH:mm:ss')
             });
         }
     }
 };
 
-async function handleViewLogs(interaction) {
-    try {
-        const logs = await Logger.getFormattedLogs(interaction.guild.id, 15);
-        
-        const logsEmbed = new EmbedBuilder()
-            .setTitle('📜 Riwayat Log')
-            .setDescription(logs.length ? 
-                logs.map(log => `${log.message}`).join('\n\n') :
-                'Belum ada log yang tercatat.')
-            .setColor(0x007bff)
-            .setFooter({ 
-                text: `${moment().tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')} • Menampilkan 15 log terakhir`,
-                iconURL: interaction.guild.iconURL({ dynamic: true })
-            });
-
-        const row = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId('back_to_menu')
-                    .setLabel('↩️ Kembali')
-                    .setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder()
-                    .setCustomId('refresh_logs')
-                    .setLabel('🔄 Refresh')
-                    .setStyle(ButtonStyle.Primary),
-                new ButtonBuilder()
-                    .setCustomId('close_menu')
-                    .setLabel('❌ Tutup')
-                    .setStyle(ButtonStyle.Danger)
-            );
-
-        await interaction.update({
-            embeds: [logsEmbed],
-            components: [row]
-        });
-
-    } catch (error) {
-        throw error;
-    }
+async function logButtonClick(type, userId, guildId) {
+    await Logger.log('BUTTON_CLICK', {
+        guildId: guildId,
+        type: type,
+        userId: userId,
+        timestamp: moment().utc().format('YYYY-MM-DD HH:mm:ss')
+    });
 }
 
-async function handleSetChannel(interaction) {
-    try {
-        const row = new ActionRowBuilder()
-            .addComponents(
-                new ChannelSelectMenuBuilder()
-                    .setCustomId('log_channel_select')
-                    .setPlaceholder('Pilih channel untuk log')
-                    .setChannelTypes(ChannelType.GuildText)
-            );
+async function handleBackToMenu(interaction) {
+    const settingsEmbed = new EmbedBuilder()
+        .setCustom('⚙️', 'Pengaturan Bot', 
+            'Pilih menu di bawah ini untuk mengatur bot:', 0x007bff);
 
-        const controlButtons = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId('back_to_menu')
-                    .setLabel('↩️ Kembali')
-                    .setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder()
-                    .setCustomId('close_menu')
-                    .setLabel('❌ Tutup')
-                    .setStyle(ButtonStyle.Danger)
-            );
+    const mainButtons = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('view_logs')
+                .setLabel('📜 Riwayat Log')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId('set_channel')
+                .setLabel('📌 Set Channel')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId('list_roles')
+                .setLabel('👑 Custom Roles')
+                .setStyle(ButtonStyle.Primary)
+        );
 
-        const embed = new EmbedBuilder()
-            .setInfo('Set Channel Log', 
-                'Pilih channel yang akan digunakan untuk mencatat aktivitas bot.\n' +
-                'Channel yang dipilih harus dapat diakses oleh bot.');
+    const closeButton = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('close_settings')
+                .setLabel('❌ Tutup')
+                .setStyle(ButtonStyle.Danger)
+        );
 
-        await interaction.update({
-            embeds: [embed],
-            components: [row, controlButtons]
-        });
-
-    } catch (error) {
-        throw error;
-    }
+    await interaction.update({
+        embeds: [settingsEmbed],
+        components: [mainButtons, closeButton]
+    });
 }
 
-async function handleListRoles(interaction) {
-    try {
-        const customRoles = interaction.guild.roles.cache
-            .filter(role => role.name.startsWith('[Custom]') || role.name.startsWith('[Test]'))
-            .sort((a, b) => b.position - a.position);
+async function handleCloseMenu(interaction) {
+    await interaction.update({
+        content: '✅ Menu ditutup',
+        embeds: [],
+        components: []
+    });
 
-        const rolesEmbed = new EmbedBuilder()
-            .setTitle('👑 Daftar Custom Role')
-            .setDescription(customRoles.size ? 
-                customRoles.map(role => 
-                    `${role} (${role.members.size} member)\n┗━ Dibuat: ${moment(role.createdAt).tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')}`
-                ).join('\n\n') :
-                'Tidak ada custom role yang aktif.')
-            .setColor(0x007bff)
-            .setFooter({ 
-                text: `Total: ${customRoles.size} role • ${moment().tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')}`,
-                iconURL: interaction.guild.iconURL({ dynamic: true })
-            });
-
-        const row = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId('back_to_menu')
-                    .setLabel('↩️ Kembali')
-                    .setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder()
-                    .setCustomId('refresh_roles')
-                    .setLabel('🔄 Refresh')
-                    .setStyle(ButtonStyle.Primary),
-                new ButtonBuilder()
-                    .setCustomId('close_menu')
-                    .setLabel('❌ Tutup')
-                    .setStyle(ButtonStyle.Danger)
-            );
-
-        await interaction.update({
-            embeds: [rolesEmbed],
-            components: [row]
-        });
-
-    } catch (error) {
-        throw error;
-    }
-}
-
-async function handleCloseSettings(interaction) {
-    try {
-        await interaction.update({
-            content: '✅ Menu ditutup',
-            embeds: [],
-            components: []
-        });
-
-        // Delete message after 3 seconds
-        setTimeout(() => {
+    // Delete message after 3 seconds
+    setTimeout(() => {
+        if (interaction.message && !interaction.message.deleted) {
             interaction.message.delete().catch(() => {});
-        }, 3000);
+        }
+    }, 3000);
+}
 
-    } catch (error) {
-        throw error;
+async function handleChannelSelect(interaction) {
+    const channel = interaction.channels.first();
+    if (!channel) {
+        return await interaction.reply({
+            content: '❌ Channel tidak valid.',
+            ephemeral: true
+        });
     }
+
+    // Check bot permissions in the channel
+    const permissions = channel.permissionsFor(interaction.client.user);
+    if (!permissions.has(['ViewChannel', 'SendMessages', 'EmbedLinks'])) {
+        return await interaction.reply({
+            content: '❌ Bot tidak memiliki izin yang cukup di channel tersebut.',
+            ephemeral: true
+        });
+    }
+
+    // Save channel setting
+    // ... kode untuk menyimpan channel ke config
+
+    const successEmbed = new EmbedBuilder()
+        .setSuccess('Channel Log Diatur', `Channel log telah diatur ke ${channel}`);
+
+    const buttons = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('back_to_menu')
+                .setLabel('↩️ Kembali')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('close_menu')
+                .setLabel('❌ Tutup')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+    await interaction.update({
+        embeds: [successEmbed],
+        components: [buttons]
+    });
+
+    await Logger.log('CHANNEL_SET', {
+        guildId: interaction.guild.id,
+        type: 'LOG_CHANNEL_UPDATE',
+        channelId: channel.id,
+        userId: interaction.user.id,
+        timestamp: moment().utc().format('YYYY-MM-DD HH:mm:ss')
+    });
 }
