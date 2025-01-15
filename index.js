@@ -201,6 +201,18 @@ client.once(Events.ClientReady, async () => {
         status: 'online'
     });
 
+    // Get Jakarta time
+    const jakartaTime = new Date().toLocaleString('en-US', { 
+        timeZone: 'Asia/Jakarta',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).replace(/(\d+)\/(\d+)\/(\d+),\s(\d+):(\d+):(\d+)/, '$3-$1-$2 $4:$5:$6');
+
     // Log startup
     await Logger.log('BOT_READY', {
         type: 'BOT_START',
@@ -209,7 +221,7 @@ client.once(Events.ClientReady, async () => {
         userCount: client.users.cache.size,
         channelCount: client.channels.cache.size,
         ping: client.ws.ping,
-        timestamp: '2025-01-15 10:32:52',
+        timestamp: jakartaTime, // Akan menghasilkan format: YYYY-MM-DD HH:MM:SS dalam waktu Jakarta
         startupBy: 'Catyro'
     });
 });
