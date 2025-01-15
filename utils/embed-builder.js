@@ -1,91 +1,20 @@
-const { EmbedBuilder } = require('discord.js');
-const moment = require('moment-timezone');
+const { EmbedBuilder: DiscordEmbed } = require('discord.js');
+const moment = require('moment');
 
-/**
- * Custom embed builder yang memperluas EmbedBuilder dari discord.js
- * dengan menambahkan metode untuk gaya-gaya yang umum digunakan
- */
-class CustomEmbedBuilder extends EmbedBuilder {
-    constructor(data = {}) {
-        super(data);
-        this.setTimestamp()
-            .setFooter({
-                text: `${moment().tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')} • ${data.footer || 'Custom Role Bot'}`
-            });
+class EmbedBuilder extends DiscordEmbed {
+    constructor() {
+        super();
+        // Set default timestamp in UTC
+        this.setTimestamp(moment.utc().toDate());
     }
 
     /**
-     * Set success style untuk embed
-     * @param {string} title - Judul embed
-     * @param {string} description - Deskripsi embed
-     * @returns {CustomEmbedBuilder}
-     */
-    setSuccess(title, description) {
-        return this
-            .setColor(0x00ff00)
-            .setTitle(`✅ ${title}`)
-            .setDescription(description);
-    }
-
-    /**
-     * Set error style untuk embed
-     * @param {string} title - Judul embed
-     * @param {string} description - Deskripsi embed
-     * @returns {CustomEmbedBuilder}
-     */
-    setError(title, description) {
-        return this
-            .setColor(0xff0000)
-            .setTitle(`❌ ${title}`)
-            .setDescription(description);
-    }
-
-    /**
-     * Set warning style untuk embed
-     * @param {string} title - Judul embed
-     * @param {string} description - Deskripsi embed
-     * @returns {CustomEmbedBuilder}
-     */
-    setWarning(title, description) {
-        return this
-            .setColor(0xffa500)
-            .setTitle(`⚠️ ${title}`)
-            .setDescription(description);
-    }
-
-    /**
-     * Set info style untuk embed
-     * @param {string} title - Judul embed
-     * @param {string} description - Deskripsi embed
-     * @returns {CustomEmbedBuilder}
-     */
-    setInfo(title, description) {
-        return this
-            .setColor(0x007bff)
-            .setTitle(`ℹ️ ${title}`)
-            .setDescription(description);
-    }
-
-    /**
-     * Set loading style untuk embed
-     * @param {string} title - Judul embed
-     * @param {string} description - Deskripsi embed
-     * @returns {CustomEmbedBuilder}
-     */
-    setLoading(title, description) {
-        return this
-            .setColor(0x7289da)
-            .setTitle(`⏳ ${title}`)
-            .setDescription(description);
-    }
-
-    /**
-     * Set custom style untuk embed
-     * @param {string} emoji - Emoji untuk judul
-     * @param {string} title - Judul embed
-     * @param {string} description - Deskripsi embed
-     * @param {number} color - Warna embed dalam format hex
-     * @returns {CustomEmbedBuilder}
+     * Sets custom embed with emoji, title, and description
+     * @param {string} emoji - Emoji for the title
+     * @param {string} title - Title of the embed
+     * @param {string} description - Description of the embed
+     * @param {number} color - Color of the embed in hex
+     * @returns {EmbedBuilder}
      */
     setCustom(emoji, title, description, color) {
         return this
@@ -95,79 +24,143 @@ class CustomEmbedBuilder extends EmbedBuilder {
     }
 
     /**
-     * Set role info style untuk embed
-     * @param {Role} role - Role Discord yang akan ditampilkan
-     * @param {string} action - Aksi yang dilakukan pada role
-     * @returns {CustomEmbedBuilder}
+     * Sets success embed
+     * @param {string} title - Title of the embed
+     * @param {string} description - Description of the embed
+     * @returns {EmbedBuilder}
      */
-    setRoleInfo(role, action) {
-        return this
-            .setColor(role.color)
-            .setTitle(`👑 ${action}`)
-            .addFields(
-                { name: 'Nama Role', value: role.name, inline: true },
-                { name: 'Warna', value: role.hexColor, inline: true },
-                { name: 'ID', value: role.id, inline: true },
-                { name: 'Posisi', value: `${role.position}`, inline: true },
-                { name: 'Mentionable', value: role.mentionable ? 'Ya' : 'Tidak', inline: true },
-                { name: 'Hoisted', value: role.hoist ? 'Ya' : 'Tidak', inline: true }
-            );
+    setSuccess(title, description) {
+        return this.setCustom('✅', title, description, 0x00ff00);
     }
 
     /**
-     * Set user info style untuk embed
-     * @param {User} user - User Discord yang akan ditampilkan
-     * @returns {CustomEmbedBuilder}
+     * Sets error embed
+     * @param {string} title - Title of the embed
+     * @param {string} description - Description of the embed
+     * @returns {EmbedBuilder}
      */
-    setUserInfo(user) {
-        return this
-            .setColor(0x2f3136)
-            .setTitle(`👤 Informasi User`)
-            .setThumbnail(user.displayAvatarURL({ dynamic: true }))
-            .addFields(
-                { name: 'Username', value: user.tag, inline: true },
-                { name: 'ID', value: user.id, inline: true },
-                { name: 'Bot', value: user.bot ? 'Ya' : 'Tidak', inline: true },
-                { name: 'Akun Dibuat', value: moment(user.createdAt).tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss'), inline: true }
-            );
+    setError(title, description) {
+        return this.setCustom('❌', title, description, 0xff0000);
     }
 
     /**
-     * Set bot info style untuk embed
-     * @param {Client} client - Client Discord.js
-     * @returns {CustomEmbedBuilder}
+     * Sets warning embed
+     * @param {string} title - Title of the embed
+     * @param {string} description - Description of the embed
+     * @returns {EmbedBuilder}
      */
-    setBotInfo(client) {
-        const botUptime = moment.duration(client.uptime);
-        return this
-            .setColor(0x2f3136)
-            .setTitle(`🤖 Informasi Bot`)
-            .setThumbnail(client.user.displayAvatarURL())
-            .addFields(
-                { name: 'Nama Bot', value: client.user.tag, inline: true },
-                { name: 'ID', value: client.user.id, inline: true },
-                { name: 'Uptime', value: `${botUptime.days()}d ${botUptime.hours()}h ${botUptime.minutes()}m`, inline: true },
-                { name: 'Server', value: `${client.guilds.cache.size}`, inline: true },
-                { name: 'Users', value: `${client.users.cache.size}`, inline: true },
-                { name: 'Commands', value: `${client.commands?.size || 0}`, inline: true },
-                { name: 'Developer', value: 'Catyro', inline: true },
-                { name: 'Node.js', value: process.version, inline: true },
-                { name: 'Discord.js', value: require('discord.js').version, inline: true }
-            );
+    setWarning(title, description) {
+        return this.setCustom('⚠️', title, description, 0xffff00);
     }
 
     /**
-     * Set custom footer untuk embed
-     * @param {string} text - Teks footer
-     * @param {string} iconURL - URL ikon untuk footer (opsional)
-     * @returns {CustomEmbedBuilder}
+     * Sets info embed
+     * @param {string} title - Title of the embed
+     * @param {string} description - Description of the embed
+     * @returns {EmbedBuilder}
      */
-    setCustomFooter(text, iconURL) {
-        return this.setFooter({
-            text: `${moment().tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')} • ${text}`,
-            iconURL: iconURL
+    setInfo(title, description) {
+        return this.setCustom('ℹ️', title, description, 0x0099ff);
+    }
+
+    /**
+     * Sets loading embed
+     * @param {string} title - Title of the embed
+     * @param {string} description - Description of the embed
+     * @returns {EmbedBuilder}
+     */
+    setLoading(title, description) {
+        return this.setCustom('⏳', title, description, 0x7289da);
+    }
+
+    /**
+     * Sets custom role embed
+     * @param {string} title - Title of the embed
+     * @param {string} description - Description of the embed
+     * @returns {EmbedBuilder}
+     */
+    setCustomRole(title, description) {
+        return this.setCustom('👑', title, description, 0xf47fff);
+    }
+
+    /**
+     * Sets test role embed
+     * @param {string} title - Title of the embed
+     * @param {string} description - Description of the embed
+     * @returns {EmbedBuilder}
+     */
+    setTestRole(title, description) {
+        return this.setCustom('🎯', title, description, 0x7289da);
+    }
+
+    /**
+     * Sets settings embed
+     * @param {string} title - Title of the embed
+     * @param {string} description - Description of the embed
+     * @returns {EmbedBuilder}
+     */
+    setSettings(title, description) {
+        return this.setCustom('⚙️', title, description, 0x007bff);
+    }
+
+    /**
+     * Adds a timestamp footer
+     * @param {string} text - Additional text for footer
+     * @returns {EmbedBuilder}
+     */
+    setTimestampFooter(text = '') {
+        const timestamp = moment.utc().format('YYYY-MM-DD HH:mm:ss');
+        const footerText = text ? `${text} • ${timestamp}` : timestamp;
+        return this.setFooter({ text: footerText });
+    }
+
+    /**
+     * Sets author as Catyro
+     * @param {boolean} withTimestamp - Whether to include timestamp
+     * @returns {EmbedBuilder}
+     */
+    setAuthorAsCatyro(withTimestamp = true) {
+        this.setAuthor({
+            name: 'Catyro',
+            iconURL: 'https://github.com/Catyro.png'
         });
+
+        if (withTimestamp) {
+            this.setTimestampFooter();
+        }
+
+        return this;
+    }
+
+    /**
+     * Sets a field with inline formatting
+     * @param {string} name - Name of the field
+     * @param {string} value - Value of the field
+     * @param {boolean} inline - Whether the field should be inline
+     * @returns {EmbedBuilder}
+     */
+    addFormattedField(name, value, inline = true) {
+        return this.addFields([{
+            name: name,
+            value: String(value),
+            inline: inline
+        }]);
+    }
+
+    /**
+     * Sets multiple fields with consistent formatting
+     * @param {Array<{name: string, value: string, inline?: boolean}>} fields 
+     * @returns {EmbedBuilder}
+     */
+    addFormattedFields(fields) {
+        return this.addFields(
+            fields.map(({ name, value, inline = true }) => ({
+                name: name,
+                value: String(value),
+                inline: inline
+            }))
+        );
     }
 }
 
-module.exports = CustomEmbedBuilder;
+module.exports = EmbedBuilder;
