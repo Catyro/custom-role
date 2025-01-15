@@ -7,7 +7,6 @@ const {
 const EmbedBuilder = require('../utils/embed-builder');
 const RoleManager = require('../utils/role-manager');
 const Logger = require('../utils/logger');
-const moment = require('moment');
 
 module.exports = {
     name: 'interactionCreate',
@@ -27,48 +26,36 @@ module.exports = {
                 }
             }
 
-            switch(buttonId) {
-                case 'view_logs':
-                case 'refresh_logs':
-                    await handleViewLogs(interaction);
+            // Split button ID for dynamic handling
+            const [action, command, ...params] = buttonId.split('_');
+
+            switch(action) {
+                case 'boost':
+                    await handleBoostButtons(interaction, command, params);
                     break;
 
-                case 'back_to_menu':
-                    await handleBackToMenu(interaction);
+                case 'settings':
+                    await handleSettingsButtons(interaction, command, params);
                     break;
 
-                case 'close_menu':
-                case 'close_settings':
-                    await handleCloseMenu(interaction);
+                case 'role':
+                    await handleRoleButtons(interaction, command, params);
                     break;
 
-                case 'set_channel':
-                    await handleSetChannel(interaction);
-                    break;
-
-                case 'list_roles':
-                case 'refresh_roles':
-                    await handleListRoles(interaction);
+                case 'upload':
+                case 'skip':
+                    await handleIconButtons(interaction, action, params);
                     break;
 
                 default:
-                    // Handle dynamic button IDs
-                    if (buttonId.startsWith('upload_icon_')) {
-                        await handleIconUpload(interaction, buttonId.split('_')[2]);
-                    }
-                    else if (buttonId.startsWith('skip_icon_')) {
-                        await handleSkipIcon(interaction, buttonId.split('_')[2]);
-                    }
-                    else {
-                        console.warn(`Unknown button interaction: ${buttonId}`);
-                        await Logger.log('ERROR', {
-                            guildId: interaction.guild.id,
-                            type: 'UNKNOWN_BUTTON',
-                            buttonId: buttonId,
-                            userId: interaction.user.id,
-                            timestamp: '2025-01-15 08:44:38'
-                        });
-                    }
+                    console.warn(`Unknown button interaction: ${buttonId}`);
+                    await Logger.log('ERROR', {
+                        guildId: interaction.guild.id,
+                        type: 'UNKNOWN_BUTTON',
+                        buttonId: buttonId,
+                        userId: interaction.user.id,
+                        timestamp: '2025-01-15 08:58:51'
+                    });
             }
 
         } catch (error) {
@@ -87,11 +74,39 @@ module.exports = {
                 error: error.message,
                 buttonId: interaction.customId,
                 userId: interaction.user.id,
-                timestamp: '2025-01-15 08:44:38'
+                timestamp: '2025-01-15 08:58:51'
             });
         }
     }
 };
+
+async function handleSettingsButtons(interaction, command, params) {
+    switch(command) {
+        case 'logs':
+            await handleViewLogs(interaction);
+            break;
+
+        case 'refresh':
+            await handleRefreshLogs(interaction);
+            break;
+
+        case 'back':
+            await handleBackToMenu(interaction);
+            break;
+
+        case 'close':
+            await handleCloseMenu(interaction);
+            break;
+
+        case 'channel':
+            await handleSetChannel(interaction);
+            break;
+
+        case 'roles':
+            await handleListRoles(interaction);
+            break;
+    }
+}
 
 async function handleViewLogs(interaction) {
     const logs = await Logger.getFormattedLogs(interaction.guild.id, 15);
@@ -101,24 +116,20 @@ async function handleViewLogs(interaction) {
         .setDescription(logs.length ? 
             logs.map(log => `${log.emoji} \`${log.timestamp}\` ${log.message}`).join('\n\n') :
             'Belum ada log yang tercatat.')
-        .setColor(0x007bff)
-        .setFooter({ 
-            text: `Total: ${logs.length} log • ${moment().utc().format('YYYY-MM-DD HH:mm:ss')}`,
-            iconURL: interaction.guild.iconURL({ dynamic: true })
-        });
+        .setColor(0x007bff);
 
     const buttons = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
-                .setCustomId('back_to_menu')
+                .setCustomId('settings_back')
                 .setLabel('↩️ Kembali')
                 .setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
-                .setCustomId('refresh_logs')
+                .setCustomId('settings_refresh')
                 .setLabel('🔄 Refresh')
                 .setStyle(ButtonStyle.Primary),
             new ButtonBuilder()
-                .setCustomId('close_menu')
+                .setCustomId('settings_close')
                 .setLabel('❌ Tutup')
                 .setStyle(ButtonStyle.Danger)
         );
@@ -132,7 +143,7 @@ async function handleViewLogs(interaction) {
         guildId: interaction.guild.id,
         type: 'VIEW_LOGS',
         userId: interaction.user.id,
-        timestamp: '2025-01-15 08:44:38'
+        timestamp: '2025-01-15 08:58:51'
     });
 }
 
@@ -144,15 +155,15 @@ async function handleBackToMenu(interaction) {
     const mainButtons = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
-                .setCustomId('view_logs')
+                .setCustomId('settings_logs')
                 .setLabel('📜 Riwayat Log')
                 .setStyle(ButtonStyle.Primary),
             new ButtonBuilder()
-                .setCustomId('set_channel')
+                .setCustomId('settings_channel')
                 .setLabel('📌 Set Channel')
                 .setStyle(ButtonStyle.Primary),
             new ButtonBuilder()
-                .setCustomId('list_roles')
+                .setCustomId('settings_roles')
                 .setLabel('👑 Custom Roles')
                 .setStyle(ButtonStyle.Primary)
         );
@@ -160,7 +171,7 @@ async function handleBackToMenu(interaction) {
     const closeButton = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
-                .setCustomId('close_settings')
+                .setCustomId('settings_close')
                 .setLabel('❌ Tutup')
                 .setStyle(ButtonStyle.Danger)
         );
@@ -168,13 +179,6 @@ async function handleBackToMenu(interaction) {
     await interaction.update({
         embeds: [settingsEmbed],
         components: [mainButtons, closeButton]
-    });
-
-    await Logger.log('BUTTON_CLICK', {
-        guildId: interaction.guild.id,
-        type: 'BACK_TO_MENU',
-        userId: interaction.user.id,
-        timestamp: '2025-01-15 08:44:38'
     });
 }
 
@@ -191,106 +195,66 @@ async function handleCloseMenu(interaction) {
             interaction.message.delete().catch(() => {});
         }
     }, 3000);
-
-    await Logger.log('BUTTON_CLICK', {
-        guildId: interaction.guild.id,
-        type: 'CLOSE_MENU',
-        userId: interaction.user.id,
-        timestamp: '2025-01-15 08:44:38'
-    });
 }
 
-async function handleIconUpload(interaction, roleId) {
-    const role = await interaction.guild.roles.fetch(roleId);
-    if (!role) {
-        return await interaction.reply({
-            content: '❌ Role tidak ditemukan.',
-            ephemeral: true
+async function handleListRoles(interaction) {
+    const roles = await RoleManager.getCustomRoles(interaction.guild);
+    
+    const rolesEmbed = new EmbedBuilder()
+        .setTitle('👑 Daftar Custom Role')
+        .setDescription(roles.length ? 
+            roles.map(role => `${role.toString()} • ${role.members.size} member(s)`).join('\n\n') :
+            'Belum ada custom role yang dibuat.')
+        .setColor(0x007bff)
+        .setFooter({ 
+            text: `Total: ${roles.length} role`,
+            iconURL: interaction.guild.iconURL({ dynamic: true })
         });
-    }
 
-    const uploadEmbed = new EmbedBuilder()
-        .setInfo('Upload Icon', 
-            'Kirim URL icon untuk role ini.\nFormat yang didukung: PNG, JPG, GIF');
+    const buttons = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('settings_back')
+                .setLabel('↩️ Kembali')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('settings_roles_refresh')
+                .setLabel('🔄 Refresh')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId('settings_close')
+                .setLabel('❌ Tutup')
+                .setStyle(ButtonStyle.Danger)
+        );
 
     await interaction.update({
-        embeds: [uploadEmbed],
-        components: []
-    });
-
-    // Create message collector
-    const filter = m => m.author.id === interaction.user.id;
-    const collector = interaction.channel.createMessageCollector({ 
-        filter, 
-        max: 1,
-        time: 60000 
-    });
-
-    collector.on('collect', async message => {
-        const url = message.content;
-        message.delete().catch(() => {});
-
-        try {
-            await role.setIcon(url);
-
-            const successEmbed = new EmbedBuilder()
-                .setSuccess('Icon Diperbarui',
-                    `Icon untuk role ${role} berhasil diperbarui!`);
-
-            await interaction.editReply({
-                embeds: [successEmbed],
-                components: []
-            });
-
-            await Logger.log('ROLE_UPDATE', {
-                guildId: interaction.guild.id,
-                type: 'ROLE_ICON_UPDATE',
-                roleId: role.id,
-                updatedBy: interaction.user.id,
-                timestamp: '2025-01-15 08:44:38'
-            });
-
-        } catch (error) {
-            const errorEmbed = new EmbedBuilder()
-                .setError('Error',
-                    'Gagal mengupload icon. Pastikan URL valid dan format yang didukung.');
-
-            await interaction.editReply({
-                embeds: [errorEmbed],
-                components: []
-            });
-        }
-    });
-
-    collector.on('end', collected => {
-        if (collected.size === 0) {
-            const timeoutEmbed = new EmbedBuilder()
-                .setError('Timeout',
-                    'Waktu upload icon telah habis.');
-
-            interaction.editReply({
-                embeds: [timeoutEmbed],
-                components: []
-            });
-        }
+        embeds: [rolesEmbed],
+        components: [buttons]
     });
 }
 
-async function handleSkipIcon(interaction, roleId) {
-    const successEmbed = new EmbedBuilder()
-        .setSuccess('Selesai',
-            'Setup role telah selesai!');
-
-    await interaction.update({
-        embeds: [successEmbed],
-        components: []
-    });
-
-    await Logger.log('BUTTON_CLICK', {
-        guildId: interaction.guild.id,
-        type: 'SKIP_ICON',
-        roleId: roleId,
-        userId: interaction.user.id,
-        timestamp: '2025-01-15 08:44:38'
+async function handleSetChannel(interaction) {
+    // Implementation for set channel
+    // This will be handled by the modal submit event
+    await interaction.showModal({
+        title: 'Set Channel Log',
+        custom_id: 'set_channel_modal',
+        components: [
+            {
+                type: 1,
+                components: [
+                    {
+                        type: 4,
+                        custom_id: 'channel_id',
+                        label: 'ID Channel',
+                        style: 1,
+                        min_length: 1,
+                        max_length: 20,
+                        placeholder: 'Masukkan ID channel',
+                        required: true
+                    }
+                ]
+            }
+        ]
     });
 }
