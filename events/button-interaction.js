@@ -1,8 +1,11 @@
 const { 
-    ButtonBuilder, 
-    ActionRowBuilder, 
-    ButtonStyle 
+    ChannelType, 
+    ChannelSelectMenuBuilder, 
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
 } = require('discord.js');
+const EmbedBuilder = require('../utils/embed-builder');
 const Logger = require('../utils/logger');
 const moment = require('moment-timezone');
 
@@ -12,7 +15,7 @@ module.exports = {
         if (!interaction.isButton()) return;
 
         try {
-            switch (interaction.customId) {
+            switch(interaction.customId) {
                 case 'view_logs':
                     await handleViewLogs(interaction);
                     break;
@@ -20,231 +23,174 @@ module.exports = {
                     await handleSetChannel(interaction);
                     break;
                 case 'list_roles':
-                    await handleListRoles(interaction, 1);
-                    break;
-                case 'refresh_logs':
-                    await handleViewLogs(interaction, true);
+                    await handleListRoles(interaction);
                     break;
                 case 'close_settings':
-                case 'close_menu':
-                    await interaction.update({
-                        content: '✅ Menu ditutup',
-                        embeds: [],
-                        components: [],
-                        ephemeral: true
-                    });
+                    await handleCloseSettings(interaction);
                     break;
-                case 'back_to_menu':
-                    await handleBackToMenu(interaction);
+                // Handle boost leaderboard buttons
+                case interaction.customId.match(/^boost_(prev|next|refresh|close)/)?.input:
+                    // These are handled in boost-leaderboard.js
                     break;
                 default:
-                    if (interaction.customId.startsWith('list_roles_')) {
-                        const page = parseInt(interaction.customId.split('_')[2]);
-                        await handleListRoles(interaction, page);
-                    }
-                    break;
+                    console.warn(`Unknown button interaction: ${interaction.customId}`);
             }
         } catch (error) {
-            console.error('Error handling button:', error);
+            console.error('Error handling button interaction:', error);
             await interaction.reply({
                 content: '❌ Terjadi kesalahan saat memproses tombol.',
                 ephemeral: true
+            });
+
+            await Logger.log('ERROR', {
+                guildId: interaction.guild.id,
+                type: 'BUTTON_INTERACTION_ERROR',
+                buttonId: interaction.customId,
+                error: error.message,
+                userId: interaction.user.id,
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
         }
     }
 };
 
-async function handleViewLogs(interaction, isRefresh = false) {
-    const logs = await Logger.getLogs(interaction.guild.id, 10);
-    
-    const logsEmbed = {
-        title: '📜 Riwayat Log',
-        description: logs.length ? 
-            logs.map(log => `\`${moment(log.timestamp).format('DD/MM HH:mm')}\` ${log.type}: ${log.description}`).join('\n') :
-            'Tidak ada log yang tersedia.',
-        color: 0x007bff,
-        timestamp: new Date(),
-        footer: {
-            text: `Last updated: ${moment().format('DD/MM HH:mm:ss')}`
-        }
-    };
+async function handleViewLogs(interaction) {
+    try {
+        const logs = await Logger.getFormattedLogs(interaction.guild.id, 15);
+        
+        const logsEmbed = new EmbedBuilder()
+            .setTitle('📜 Riwayat Log')
+            .setDescription(logs.length ? 
+                logs.map(log => `${log.message}`).join('\n\n') :
+                'Belum ada log yang tercatat.')
+            .setColor(0x007bff)
+            .setFooter({ 
+                text: `${moment().tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')} • Menampilkan 15 log terakhir`,
+                iconURL: interaction.guild.iconURL({ dynamic: true })
+            });
 
-    const navigationButtons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('refresh_logs')
-                .setLabel('🔄 Refresh')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('back_to_menu')
-                .setLabel('↩️ Kembali')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('close_menu')
-                .setLabel('❌ Tutup')
-                .setStyle(ButtonStyle.Danger)
-        );
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('back_to_menu')
+                    .setLabel('↩️ Kembali')
+                    .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId('refresh_logs')
+                    .setLabel('🔄 Refresh')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId('close_menu')
+                    .setLabel('❌ Tutup')
+                    .setStyle(ButtonStyle.Danger)
+            );
 
-    if (isRefresh) {
         await interaction.update({
             embeds: [logsEmbed],
-            components: [navigationButtons]
+            components: [row]
         });
-    } else {
-        await interaction.update({
-            embeds: [logsEmbed],
-            components: [navigationButtons]
-        });
+
+    } catch (error) {
+        throw error;
     }
 }
 
 async function handleSetChannel(interaction) {
-    const channelSelectEmbed = {
-        title: '📌 Pengaturan Channel Log',
-        description: 'Pilih channel yang akan digunakan sebagai log bot.\nKlik tombol di bawah untuk memilih channel.',
-        color: 0x007bff,
-        timestamp: new Date()
-    };
+    try {
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ChannelSelectMenuBuilder()
+                    .setCustomId('log_channel_select')
+                    .setPlaceholder('Pilih channel untuk log')
+                    .setChannelTypes(ChannelType.GuildText)
+            );
 
-    const channelButtons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('select_channel')
-                .setLabel('📌 Pilih Channel')
-                .setStyle(ButtonStyle.Primary)
-        );
+        const controlButtons = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('back_to_menu')
+                    .setLabel('↩️ Kembali')
+                    .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId('close_menu')
+                    .setLabel('❌ Tutup')
+                    .setStyle(ButtonStyle.Danger)
+            );
 
-    const controlButtons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('back_to_menu')
-                .setLabel('↩️ Kembali')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('close_menu')
-                .setLabel('❌ Tutup')
-                .setStyle(ButtonStyle.Danger)
-        );
+        const embed = new EmbedBuilder()
+            .setInfo('Set Channel Log', 
+                'Pilih channel yang akan digunakan untuk mencatat aktivitas bot.\n' +
+                'Channel yang dipilih harus dapat diakses oleh bot.');
 
-    await interaction.update({
-        embeds: [channelSelectEmbed],
-        components: [channelButtons, controlButtons]
-    });
+        await interaction.update({
+            embeds: [embed],
+            components: [row, controlButtons]
+        });
+
+    } catch (error) {
+        throw error;
+    }
 }
 
-async function handleListRoles(interaction, page) {
-    const roles = interaction.guild.roles.cache
-        .filter(role => role.name.startsWith('[Custom]'))
-        .sort((a, b) => b.position - a.position);
-    
-    const itemsPerPage = 10;
-    const maxPage = Math.ceil(roles.size / itemsPerPage);
-    
-    const startIndex = (page - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const currentRoles = Array.from(roles.values()).slice(startIndex, endIndex);
+async function handleListRoles(interaction) {
+    try {
+        const customRoles = interaction.guild.roles.cache
+            .filter(role => role.name.startsWith('[Custom]') || role.name.startsWith('[Test]'))
+            .sort((a, b) => b.position - a.position);
 
-    const rolesEmbed = {
-        title: '👑 Daftar Custom Role',
-        description: currentRoles.length ?
-            currentRoles.map((role, i) => {
-                const member = role.members.first();
-                return `${startIndex + i + 1}. ${role} - ${member ? `<@${member.id}>` : 'Tidak ada member'}`;
-            }).join('\n') :
-            'Tidak ada custom role yang aktif.',
-        color: 0x007bff,
-        footer: { 
-            text: `Halaman ${page}/${maxPage || 1} • Total: ${roles.size} role` 
-        },
-        timestamp: new Date()
-    };
+        const rolesEmbed = new EmbedBuilder()
+            .setTitle('👑 Daftar Custom Role')
+            .setDescription(customRoles.size ? 
+                customRoles.map(role => 
+                    `${role} (${role.members.size} member)\n┗━ Dibuat: ${moment(role.createdAt).tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')}`
+                ).join('\n\n') :
+                'Tidak ada custom role yang aktif.')
+            .setColor(0x007bff)
+            .setFooter({ 
+                text: `Total: ${customRoles.size} role • ${moment().tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')}`,
+                iconURL: interaction.guild.iconURL({ dynamic: true })
+            });
 
-    const navigationButtons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId(`list_roles_${page - 1}`)
-                .setLabel('⬅️ Sebelumnya')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(page <= 1),
-            new ButtonBuilder()
-                .setCustomId(`list_roles_${page + 1}`)
-                .setLabel('➡️ Selanjutnya')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(page >= maxPage)
-        );
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('back_to_menu')
+                    .setLabel('↩️ Kembali')
+                    .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId('refresh_roles')
+                    .setLabel('🔄 Refresh')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId('close_menu')
+                    .setLabel('❌ Tutup')
+                    .setStyle(ButtonStyle.Danger)
+            );
 
-    const controlButtons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('back_to_menu')
-                .setLabel('↩️ Kembali')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('close_menu')
-                .setLabel('❌ Tutup')
-                .setStyle(ButtonStyle.Danger)
-        );
+        await interaction.update({
+            embeds: [rolesEmbed],
+            components: [row]
+        });
 
-    await interaction.update({
-        embeds: [rolesEmbed],
-        components: [navigationButtons, controlButtons]
-    });
+    } catch (error) {
+        throw error;
+    }
 }
 
-async function handleBackToMenu(interaction) {
-    const mainButtons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('view_logs')
-                .setLabel('📜 Lihat Logs')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('set_channel')
-                .setLabel('📌 Set Channel Log')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('list_roles')
-                .setLabel('👑 List Role')
-                .setStyle(ButtonStyle.Primary)
-        );
+async function handleCloseSettings(interaction) {
+    try {
+        await interaction.update({
+            content: '✅ Menu ditutup',
+            embeds: [],
+            components: []
+        });
 
-    const closeButton = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('close_settings')
-                .setLabel('❌ Tutup')
-                .setStyle(ButtonStyle.Danger)
-        );
+        // Delete message after 3 seconds
+        setTimeout(() => {
+            interaction.message.delete().catch(() => {});
+        }, 3000);
 
-    const settingsEmbed = {
-        title: '⚙️ Pengaturan Bot Custom Role',
-        description: 'Silahkan pilih menu yang tersedia di bawah ini:',
-        fields: [
-            {
-                name: '📜 Lihat Logs',
-                value: 'Melihat riwayat aktivitas bot',
-                inline: true
-            },
-            {
-                name: '📌 Set Channel Log',
-                value: 'Mengatur channel untuk log bot',
-                inline: true
-            },
-            {
-                name: '👑 List Role',
-                value: 'Melihat daftar custom role',
-                inline: true
-            }
-        ],
-        color: 0x007bff,
-        timestamp: new Date(),
-        footer: {
-            text: `Requested by ${interaction.user.tag}`
-        }
-    };
-
-    await interaction.update({
-        embeds: [settingsEmbed],
-        components: [mainButtons, closeButton]
-    });
+    } catch (error) {
+        throw error;
+    }
 }
