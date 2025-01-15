@@ -1,166 +1,143 @@
-const { EmbedBuilder: DiscordEmbed } = require('discord.js');
-const moment = require('moment');
+const { EmbedBuilder } = require('discord.js');
+const TimeFormatter = require('./time-formatter');
 
-class EmbedBuilder extends DiscordEmbed {
+class CustomEmbedBuilder extends EmbedBuilder {
     constructor() {
         super();
-        // Set default timestamp in UTC
-        this.setTimestamp(moment.utc().toDate());
+        this.setTimestamp()
+            .setFooter({ 
+                text: TimeFormatter.formatToJakarta(new Date()).full 
+            });
     }
 
     /**
-     * Sets custom embed with emoji, title, and description
-     * @param {string} emoji - Emoji for the title
-     * @param {string} title - Title of the embed
-     * @param {string} description - Description of the embed
-     * @param {number} color - Color of the embed in hex
-     * @returns {EmbedBuilder}
+     * Sets a custom embed with title, description, and color
+     * @param {string} emoji - Emoji untuk title
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
+     * @param {number} color - Warna embed (hex)
      */
-    setCustom(emoji, title, description, color) {
-        return this
-            .setColor(color)
-            .setTitle(`${emoji} ${title}`)
-            .setDescription(description);
+    setCustom(emoji, title, description, color = 0x2B2D31) {
+        return this.setTitle(`${emoji} ${title}`)
+            .setDescription(description)
+            .setColor(color);
     }
 
     /**
-     * Sets success embed
-     * @param {string} title - Title of the embed
-     * @param {string} description - Description of the embed
-     * @returns {EmbedBuilder}
+     * Sets a success embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
      */
     setSuccess(title, description) {
-        return this.setCustom('✅', title, description, 0x00ff00);
+        return this.setCustom('✅', title, description, 0x57F287);
     }
 
     /**
-     * Sets error embed
-     * @param {string} title - Title of the embed
-     * @param {string} description - Description of the embed
-     * @returns {EmbedBuilder}
+     * Sets an error embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
      */
     setError(title, description) {
-        return this.setCustom('❌', title, description, 0xff0000);
+        return this.setCustom('❌', title, description, 0xED4245);
     }
 
     /**
-     * Sets warning embed
-     * @param {string} title - Title of the embed
-     * @param {string} description - Description of the embed
-     * @returns {EmbedBuilder}
+     * Sets a warning embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
      */
     setWarning(title, description) {
-        return this.setCustom('⚠️', title, description, 0xffff00);
+        return this.setCustom('⚠️', title, description, 0xFEE75C);
     }
 
     /**
-     * Sets info embed
-     * @param {string} title - Title of the embed
-     * @param {string} description - Description of the embed
-     * @returns {EmbedBuilder}
+     * Sets an info embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
      */
     setInfo(title, description) {
-        return this.setCustom('ℹ️', title, description, 0x0099ff);
+        return this.setCustom('ℹ️', title, description, 0x5865F2);
     }
 
     /**
-     * Sets loading embed
-     * @param {string} title - Title of the embed
-     * @param {string} description - Description of the embed
-     * @returns {EmbedBuilder}
-     */
-    setLoading(title, description) {
-        return this.setCustom('⏳', title, description, 0x7289da);
-    }
-
-    /**
-     * Sets custom role embed
-     * @param {string} title - Title of the embed
-     * @param {string} description - Description of the embed
-     * @returns {EmbedBuilder}
-     */
-    setCustomRole(title, description) {
-        return this.setCustom('👑', title, description, 0xf47fff);
-    }
-
-    /**
-     * Sets test role embed
-     * @param {string} title - Title of the embed
-     * @param {string} description - Description of the embed
-     * @returns {EmbedBuilder}
+     * Sets a test role embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
      */
     setTestRole(title, description) {
-        return this.setCustom('🎯', title, description, 0x7289da);
+        return this.setCustom('🎯', title, description, 0x7289DA);
     }
 
     /**
-     * Sets settings embed
-     * @param {string} title - Title of the embed
-     * @param {string} description - Description of the embed
-     * @returns {EmbedBuilder}
+     * Sets a boost embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
+     */
+    setBoost(title, description) {
+        return this.setCustom('🚀', title, description, 0xF47FFF);
+    }
+
+    /**
+     * Sets a logs embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
+     */
+    setLogs(title, description) {
+        return this.setCustom('📝', title, description, 0x2B2D31);
+    }
+
+    /**
+     * Sets a settings embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
      */
     setSettings(title, description) {
-        return this.setCustom('⚙️', title, description, 0x007bff);
+        return this.setCustom('⚙️', title, description, 0x5865F2);
     }
 
     /**
-     * Adds a timestamp footer
-     * @param {string} text - Additional text for footer
-     * @returns {EmbedBuilder}
+     * Sets a role list embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
      */
-    setTimestampFooter(text = '') {
-        const timestamp = moment.utc().format('YYYY-MM-DD HH:mm:ss');
-        const footerText = text ? `${text} • ${timestamp}` : timestamp;
-        return this.setFooter({ text: footerText });
+    setRoleList(title, description) {
+        return this.setCustom('👥', title, description, 0x5865F2);
     }
 
     /**
-     * Sets author as Catyro
-     * @param {boolean} withTimestamp - Whether to include timestamp
-     * @returns {EmbedBuilder}
+     * Sets a leaderboard embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
      */
-    setAuthorAsCatyro(withTimestamp = true) {
-        this.setAuthor({
-            name: 'Catyro',
-            iconURL: 'https://github.com/Catyro.png'
-        });
-
-        if (withTimestamp) {
-            this.setTimestampFooter();
-        }
-
-        return this;
+    setLeaderboard(title, description) {
+        return this.setCustom('🏆', title, description, 0xF47FFF);
     }
 
     /**
-     * Sets a field with inline formatting
-     * @param {string} name - Name of the field
-     * @param {string} value - Value of the field
+     * Adds a duration field to the embed
+     * @param {number} milliseconds - Duration in milliseconds
      * @param {boolean} inline - Whether the field should be inline
-     * @returns {EmbedBuilder}
      */
-    addFormattedField(name, value, inline = true) {
-        return this.addFields([{
-            name: name,
-            value: String(value),
-            inline: inline
-        }]);
+    addDurationField(milliseconds, inline = true) {
+        return this.addFields({
+            name: '⏱️ Durasi',
+            value: TimeFormatter.formatDuration(milliseconds),
+            inline
+        });
     }
 
     /**
-     * Sets multiple fields with consistent formatting
-     * @param {Array<{name: string, value: string, inline?: boolean}>} fields 
-     * @returns {EmbedBuilder}
+     * Adds a remaining time field to the embed
+     * @param {Date} endTime - End time of the duration
+     * @param {boolean} inline - Whether the field should be inline
      */
-    addFormattedFields(fields) {
-        return this.addFields(
-            fields.map(({ name, value, inline = true }) => ({
-                name: name,
-                value: String(value),
-                inline: inline
-            }))
-        );
+    addRemainingTimeField(endTime, inline = true) {
+        return this.addFields({
+            name: '⏳ Sisa Waktu',
+            value: TimeFormatter.getRemainingTime(endTime),
+            inline
+        });
     }
 }
 
-module.exports = EmbedBuilder;
+module.exports = CustomEmbedBuilder;
