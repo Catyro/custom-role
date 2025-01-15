@@ -4,9 +4,6 @@ const {
     ActionRowBuilder, 
     ButtonStyle 
 } = require('discord.js');
-const EmbedService = require('../utils/embed-builder');
-const Logger = require('../utils/logger');
-const config = require('../config');
 const moment = require('moment-timezone');
 
 module.exports = {
@@ -22,24 +19,31 @@ module.exports = {
                 .sort((a, b) => a.premiumSince - b.premiumSince);
 
             // Create leaderboard embed
-            const leaderboardEmbed = EmbedService.createEmbed({
-                title: `${config.EMOJIS.BOOST} Boost Leaderboard - ${interaction.guild.name}`,
+            const leaderboardEmbed = {
+                title: `🌟 Boost Leaderboard - ${interaction.guild.name}`,
                 description: boosters.size ? 
                     `Total Booster: ${boosters.size} member\n\n${
                         Array.from(boosters.values())
-                            .map((member, index) => 
-                                `\`${(index + 1).toString().padStart(2, '0')}.\` <@${member.id}>\n┗━ Boost sejak: ${moment(member.premiumSince).tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')}`
-                            ).join('\n\n')
+                            .map((member, index) => {
+                                let medal = '';
+                                if (index === 0) medal = '🥇';
+                                else if (index === 1) medal = '🥈';
+                                else if (index === 2) medal = '🥉';
+                                
+                                return `${medal}\`${(index + 1).toString().padStart(2, '0')}.\` <@${member.id}>\n┗━ Boost sejak: ${moment(member.premiumSince).tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')}`;
+                            }).join('\n\n')
                     }` : 
                     'Belum ada member yang boost server ini.',
-                thumbnail: interaction.guild.iconURL({ dynamic: true }),
-                color: config.EMBED_COLORS.BOOST,
+                thumbnail: {
+                    url: interaction.guild.iconURL({ dynamic: true })
+                },
+                color: 0xf47fff,
                 footer: {
                     text: `Requested by ${interaction.user.tag}`,
-                    iconURL: interaction.user.displayAvatarURL({ dynamic: true })
+                    icon_url: interaction.user.displayAvatarURL({ dynamic: true })
                 },
-                timestamp: true
-            });
+                timestamp: new Date()
+            };
 
             // Create close button
             const closeButton = new ActionRowBuilder()
@@ -50,31 +54,37 @@ module.exports = {
                         .setStyle(ButtonStyle.Danger)
                 );
 
-            await interaction.reply({
+            const message = await interaction.reply({
                 embeds: [leaderboardEmbed],
-                components: [closeButton]
+                components: [closeButton],
+                fetchReply: true
             });
 
-            // Log command usage
-            await Logger.log('COMMAND', {
-                type: 'BOOST_LEADERBOARD',
-                userId: interaction.user.id,
-                guildId: interaction.guild.id,
-                boosterCount: boosters.size,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            // Create button collector
+            const collector = message.createMessageComponentCollector({
+                filter: i => i.customId === 'close_leaderboard' && i.user.id === interaction.user.id,
+                time: 60000
+            });
+
+            collector.on('collect', async i => {
+                await i.update({
+                    content: '✅ Leaderboard ditutup',
+                    embeds: [],
+                    components: [],
+                    ephemeral: true
+                });
+            });
+
+            collector.on('end', async (collected, reason) => {
+                if (reason === 'time') {
+                    await message.edit({
+                        components: []
+                    }).catch(() => {});
+                }
             });
 
         } catch (error) {
             console.error('Error in boost-leaderboard command:', error);
-            await Logger.log('ERROR', {
-                type: 'COMMAND_ERROR',
-                command: 'boost-leaderboard',
-                error: error.message,
-                userId: interaction.user.id,
-                guildId: interaction.guild.id,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-
             await interaction.reply({
                 content: '❌ Terjadi kesalahan saat menampilkan leaderboard.',
                 ephemeral: true

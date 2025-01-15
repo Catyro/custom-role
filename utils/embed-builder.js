@@ -1,141 +1,173 @@
 const { EmbedBuilder } = require('discord.js');
-const config = require('../config');
 const moment = require('moment-timezone');
 
-class EmbedService {
-    /**
-     * Membuat embed message dengan format standar
-     * @param {Object} options - Opsi untuk membuat embed
-     * @param {string} options.title - Judul embed
-     * @param {string} options.description - Deskripsi embed
-     * @param {Array} options.fields - Array of fields untuk embed
-     * @param {string} options.color - Warna embed (hex)
-     * @param {Object} options.thumbnail - Thumbnail untuk embed
-     * @param {Object} options.image - Image untuk embed
-     * @param {Object} options.author - Author untuk embed
-     * @param {Object} options.footer - Footer untuk embed
-     * @param {boolean} options.timestamp - Menambahkan timestamp atau tidak
-     * @returns {EmbedBuilder} Discord embed message
-     */
-    static createEmbed(options) {
-        const embed = new EmbedBuilder();
-
-        if (options.title) embed.setTitle(options.title);
-        if (options.description) embed.setDescription(options.description);
-        if (options.fields) embed.addFields(options.fields);
-        if (options.color) embed.setColor(options.color);
-        if (options.thumbnail) embed.setThumbnail(options.thumbnail);
-        if (options.image) embed.setImage(options.image);
-        if (options.author) embed.setAuthor(options.author);
-        if (options.footer) embed.setFooter(options.footer);
-        if (options.timestamp) embed.setTimestamp();
-
-        return embed;
+/**
+ * Custom embed builder yang memperluas EmbedBuilder dari discord.js
+ * dengan menambahkan metode untuk gaya-gaya yang umum digunakan
+ */
+class CustomEmbedBuilder extends EmbedBuilder {
+    constructor(data = {}) {
+        super(data);
+        this.setTimestamp()
+            .setFooter({
+                text: `${moment().tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')} • ${data.footer || 'Custom Role Bot'}`
+            });
     }
 
     /**
-     * Membuat embed untuk success message
-     * @param {string} description - Pesan sukses
-     * @returns {EmbedBuilder} Success embed
+     * Set success style untuk embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
+     * @returns {CustomEmbedBuilder}
      */
-    static successEmbed(description) {
-        return this.createEmbed({
-            description: `${config.EMOJIS.SUCCESS} ${description}`,
-            color: config.EMBED_COLORS.SUCCESS,
-            timestamp: true
-        });
+    setSuccess(title, description) {
+        return this
+            .setColor(0x00ff00)
+            .setTitle(`✅ ${title}`)
+            .setDescription(description);
     }
 
     /**
-     * Membuat embed untuk error message
-     * @param {string} description - Pesan error
-     * @returns {EmbedBuilder} Error embed
+     * Set error style untuk embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
+     * @returns {CustomEmbedBuilder}
      */
-    static errorEmbed(description) {
-        return this.createEmbed({
-            description: `${config.EMOJIS.ERROR} ${description}`,
-            color: config.EMBED_COLORS.ERROR,
-            timestamp: true
-        });
+    setError(title, description) {
+        return this
+            .setColor(0xff0000)
+            .setTitle(`❌ ${title}`)
+            .setDescription(description);
     }
 
     /**
-     * Membuat embed untuk warning message
-     * @param {string} description - Pesan warning
-     * @returns {EmbedBuilder} Warning embed
+     * Set warning style untuk embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
+     * @returns {CustomEmbedBuilder}
      */
-    static warningEmbed(description) {
-        return this.createEmbed({
-            description: `${config.EMOJIS.WARNING} ${description}`,
-            color: config.EMBED_COLORS.WARNING,
-            timestamp: true
-        });
+    setWarning(title, description) {
+        return this
+            .setColor(0xffa500)
+            .setTitle(`⚠️ ${title}`)
+            .setDescription(description);
     }
 
     /**
-     * Membuat embed untuk role info
-     * @param {Object} role - Role object
-     * @param {Object} member - Member object
-     * @returns {EmbedBuilder} Role info embed
+     * Set info style untuk embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
+     * @returns {CustomEmbedBuilder}
      */
-    static roleInfoEmbed(role, member) {
-        return this.createEmbed({
-            title: `${config.EMOJIS.ROLE} Informasi Role`,
-            fields: [
-                {
-                    name: 'Nama',
-                    value: role.name,
-                    inline: true
-                },
-                {
-                    name: 'Warna',
-                    value: role.hexColor,
-                    inline: true
-                },
-                {
-                    name: 'Dibuat Pada',
-                    value: moment(role.createdAt).tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss'),
-                    inline: true
-                },
-                {
-                    name: 'Dimiliki Oleh',
-                    value: `<@${member.id}>`,
-                    inline: true
-                }
-            ],
-            thumbnail: member.user.displayAvatarURL({ dynamic: true }),
-            color: role.color || config.EMBED_COLORS.PRIMARY,
-            timestamp: true
-        });
+    setInfo(title, description) {
+        return this
+            .setColor(0x007bff)
+            .setTitle(`ℹ️ ${title}`)
+            .setDescription(description);
     }
 
     /**
-     * Membuat embed untuk boost notification
-     * @param {Object} member - Member yang boost
-     * @param {Object} role - Role yang dibuat
-     * @returns {EmbedBuilder} Boost notification embed
+     * Set loading style untuk embed
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
+     * @returns {CustomEmbedBuilder}
      */
-    static boostNotificationEmbed(member, role) {
-        return this.createEmbed({
-            title: `${config.EMOJIS.BOOST} Terima Kasih Telah Boost!`,
-            description: 'Sebagai hadiah, kamu mendapatkan custom role!\nGunakan command `/edit-role` untuk mengustomisasi role kamu.',
-            fields: [
-                {
-                    name: 'Role Kamu',
-                    value: role.toString(),
-                    inline: true
-                },
-                {
-                    name: 'Cara Menggunakan',
-                    value: '`/edit-role` - Mengubah nama dan warna role\n`/settings` - Melihat pengaturan role',
-                    inline: false
-                }
-            ],
-            thumbnail: member.user.displayAvatarURL({ dynamic: true }),
-            color: config.EMBED_COLORS.BOOST,
-            timestamp: true
+    setLoading(title, description) {
+        return this
+            .setColor(0x7289da)
+            .setTitle(`⏳ ${title}`)
+            .setDescription(description);
+    }
+
+    /**
+     * Set custom style untuk embed
+     * @param {string} emoji - Emoji untuk judul
+     * @param {string} title - Judul embed
+     * @param {string} description - Deskripsi embed
+     * @param {number} color - Warna embed dalam format hex
+     * @returns {CustomEmbedBuilder}
+     */
+    setCustom(emoji, title, description, color) {
+        return this
+            .setColor(color)
+            .setTitle(`${emoji} ${title}`)
+            .setDescription(description);
+    }
+
+    /**
+     * Set role info style untuk embed
+     * @param {Role} role - Role Discord yang akan ditampilkan
+     * @param {string} action - Aksi yang dilakukan pada role
+     * @returns {CustomEmbedBuilder}
+     */
+    setRoleInfo(role, action) {
+        return this
+            .setColor(role.color)
+            .setTitle(`👑 ${action}`)
+            .addFields(
+                { name: 'Nama Role', value: role.name, inline: true },
+                { name: 'Warna', value: role.hexColor, inline: true },
+                { name: 'ID', value: role.id, inline: true },
+                { name: 'Posisi', value: `${role.position}`, inline: true },
+                { name: 'Mentionable', value: role.mentionable ? 'Ya' : 'Tidak', inline: true },
+                { name: 'Hoisted', value: role.hoist ? 'Ya' : 'Tidak', inline: true }
+            );
+    }
+
+    /**
+     * Set user info style untuk embed
+     * @param {User} user - User Discord yang akan ditampilkan
+     * @returns {CustomEmbedBuilder}
+     */
+    setUserInfo(user) {
+        return this
+            .setColor(0x2f3136)
+            .setTitle(`👤 Informasi User`)
+            .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+            .addFields(
+                { name: 'Username', value: user.tag, inline: true },
+                { name: 'ID', value: user.id, inline: true },
+                { name: 'Bot', value: user.bot ? 'Ya' : 'Tidak', inline: true },
+                { name: 'Akun Dibuat', value: moment(user.createdAt).tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss'), inline: true }
+            );
+    }
+
+    /**
+     * Set bot info style untuk embed
+     * @param {Client} client - Client Discord.js
+     * @returns {CustomEmbedBuilder}
+     */
+    setBotInfo(client) {
+        const botUptime = moment.duration(client.uptime);
+        return this
+            .setColor(0x2f3136)
+            .setTitle(`🤖 Informasi Bot`)
+            .setThumbnail(client.user.displayAvatarURL())
+            .addFields(
+                { name: 'Nama Bot', value: client.user.tag, inline: true },
+                { name: 'ID', value: client.user.id, inline: true },
+                { name: 'Uptime', value: `${botUptime.days()}d ${botUptime.hours()}h ${botUptime.minutes()}m`, inline: true },
+                { name: 'Server', value: `${client.guilds.cache.size}`, inline: true },
+                { name: 'Users', value: `${client.users.cache.size}`, inline: true },
+                { name: 'Commands', value: `${client.commands?.size || 0}`, inline: true },
+                { name: 'Developer', value: 'Catyro', inline: true },
+                { name: 'Node.js', value: process.version, inline: true },
+                { name: 'Discord.js', value: require('discord.js').version, inline: true }
+            );
+    }
+
+    /**
+     * Set custom footer untuk embed
+     * @param {string} text - Teks footer
+     * @param {string} iconURL - URL ikon untuk footer (opsional)
+     * @returns {CustomEmbedBuilder}
+     */
+    setCustomFooter(text, iconURL) {
+        return this.setFooter({
+            text: `${moment().tz('Asia/Jakarta').format('DD/MM/YYYY HH:mm:ss')} • ${text}`,
+            iconURL: iconURL
         });
     }
 }
 
-module.exports = EmbedService;
+module.exports = CustomEmbedBuilder;

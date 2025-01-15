@@ -1,11 +1,4 @@
-const { 
-    ModalBuilder, 
-    TextInputBuilder, 
-    TextInputStyle, 
-    ActionRowBuilder 
-} = require('discord.js');
 const Logger = require('./logger');
-const config = require('../config');
 const moment = require('moment-timezone');
 
 class RoleManager {
@@ -15,13 +8,13 @@ class RoleManager {
      * @param {Object} options - Opsi role
      * @returns {Promise<Role>} Role yang dibuat
      */
-    async createCustomRole(member, options) {
+    async createCustomRole(member, options = {}) {
         try {
             // Validate role name
             const roleName = this.validateRoleName(options.name || `[Custom] ${member.user.username}`);
             
             // Validate role color
-            const roleColor = this.validateColor(options.color || config.EMBED_COLORS.PRIMARY);
+            const roleColor = this.validateColor(options.color || '#f47fff');
 
             // Create role
             const role = await member.guild.roles.create({
@@ -31,15 +24,22 @@ class RoleManager {
                 permissions: []
             });
 
+            // Position the role just below the bot's highest role
+            const botMember = member.guild.members.cache.get(member.client.user.id);
+            const highestRole = botMember.roles.highest;
+            await role.setPosition(highestRole.position - 1);
+
             // Assign role to member
             await member.roles.add(role);
 
             // Log role creation
-            await Logger.log('ROLE', {
+            await Logger.log('ROLE_CREATE', {
+                guildId: member.guild.id,
                 type: 'ROLE_CREATED',
                 roleId: role.id,
                 userId: member.id,
-                guildId: member.guild.id,
+                roleName: roleName,
+                roleColor: roleColor,
                 timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
 
@@ -60,25 +60,27 @@ class RoleManager {
     async createTestRole(guild, options) {
         try {
             const member = await guild.members.fetch(options.userId);
-            const duration = options.duration || config.ROLE_LIMITS.DEFAULT_TEST_DURATION;
+            const duration = options.duration || 300000; // Default 5 minutes
 
             // Create temporary role
             const role = await this.createCustomRole(member, {
                 name: `[Test] ${options.name || member.user.username}`,
-                color: options.color
+                color: options.color || '#007bff'
             });
 
             // Set timeout to delete role
             setTimeout(async () => {
                 try {
-                    await role.delete('Test role duration expired');
-                    await Logger.log('ROLE', {
-                        type: 'TEST_ROLE_EXPIRED',
-                        roleId: role.id,
-                        userId: member.id,
-                        guildId: guild.id,
-                        timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-                    });
+                    if (role && !role.deleted) {
+                        await role.delete('Test role duration expired');
+                        await Logger.log('ROLE_DELETE', {
+                            guildId: guild.id,
+                            type: 'TEST_ROLE_EXPIRED',
+                            roleId: role.id,
+                            userId: member.id,
+                            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                        });
+                    }
                 } catch (error) {
                     console.error('Error deleting test role:', error);
                 }
@@ -93,60 +95,11 @@ class RoleManager {
     }
 
     /**
-     * Menampilkan modal edit role
-     * @param {Interaction} interaction - Interaction dari button
-     * @param {string} roleId - ID role yang akan diedit
-     */
-    async showEditModal(interaction, roleId) {
-        try {
-            const role = await interaction.guild.roles.fetch(roleId);
-            if (!role) throw new Error('Role tidak ditemukan');
-
-            const modal = new ModalBuilder()
-                .setCustomId(`edit_role_${roleId}`)
-                .setTitle('Edit Custom Role');
-
-            const nameInput = new TextInputBuilder()
-                .setCustomId('role_name')
-                .setLabel('Nama Role')
-                .setStyle(TextInputStyle.Short)
-                .setMaxLength(32)
-                .setValue(role.name)
-                .setRequired(true);
-
-            const colorInput = new TextInputBuilder()
-                .setCustomId('role_color')
-                .setLabel('Warna Role (HEX)')
-                .setStyle(TextInputStyle.Short)
-                .setMaxLength(7)
-                .setValue(role.hexColor)
-                .setRequired(true);
-
-            const iconInput = new TextInputBuilder()
-                .setCustomId('role_icon')
-                .setLabel('Icon Role URL (Opsional)')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(false);
-
-            const firstRow = new ActionRowBuilder().addComponents(nameInput);
-            const secondRow = new ActionRowBuilder().addComponents(colorInput);
-            const thirdRow = new ActionRowBuilder().addComponents(iconInput);
-
-            modal.addComponents(firstRow, secondRow, thirdRow);
-            await interaction.showModal(modal);
-
-        } catch (error) {
-            console.error('Error showing edit modal:', error);
-            throw error;
-        }
-    }
-
-    /**
      * Mengedit role
      * @param {Role} role - Role yang akan diedit
      * @param {Object} options - Opsi edit role
      */
-    async editRole(role, options) {
+    async editRole(role, options = {}) {
         try {
             const updateData = {};
 
@@ -164,11 +117,11 @@ class RoleManager {
 
             await role.edit(updateData);
 
-            await Logger.log('ROLE', {
+            await Logger.log('ROLE_EDIT', {
+                guildId: role.guild.id,
                 type: 'ROLE_EDITED',
                 roleId: role.id,
-                updates: Object.keys(updateData),
-                guildId: role.guild.id,
+                updates: updateData,
                 timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
 
@@ -188,13 +141,13 @@ class RoleManager {
                 role.name.startsWith('[Custom]') || role.name.startsWith('[Test]')
             );
 
-            if (customRole) {
-                await customRole.delete('Boost ended or role removal requested');
-                await Logger.log('ROLE', {
+            if (customRole && !customRole.deleted) {
+                await customRole.delete('Role removal requested or boost ended');
+                await Logger.log('ROLE_DELETE', {
+                    guildId: member.guild.id,
                     type: 'ROLE_REMOVED',
                     roleId: customRole.id,
                     userId: member.id,
-                    guildId: member.guild.id,
                     timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
                 });
             }
@@ -211,16 +164,22 @@ class RoleManager {
      * @returns {string} Nama role yang valid
      */
     validateRoleName(name) {
-        if (!name || name.length < 1) {
+        if (!name || typeof name !== 'string') {
+            throw new Error('Nama role tidak valid');
+        }
+
+        // Remove unsafe characters and trim
+        name = name.replace(/[^\w\s\[\]\-]/g, '').trim();
+
+        if (name.length < 1) {
             throw new Error('Nama role tidak boleh kosong');
         }
 
-        if (name.length > config.ROLE_LIMITS.MAX_NAME_LENGTH) {
-            throw new Error(`Nama role tidak boleh lebih dari ${config.ROLE_LIMITS.MAX_NAME_LENGTH} karakter`);
+        if (name.length > 32) {
+            throw new Error('Nama role tidak boleh lebih dari 32 karakter');
         }
 
-        // Remove unsafe characters
-        return name.replace(/[^\w\s\[\]\-]/g, '');
+        return name;
     }
 
     /**
@@ -230,7 +189,7 @@ class RoleManager {
      */
     validateColor(color) {
         const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-        if (!hexRegex.test(color)) {
+        if (!color || !hexRegex.test(color)) {
             throw new Error('Format warna tidak valid (gunakan format HEX, contoh: #FF0000)');
         }
         return color;
@@ -246,21 +205,19 @@ class RoleManager {
 
         try {
             const response = await fetch(url);
-            const contentType = response.headers.get('content-type');
-            const contentLength = response.headers.get('content-length');
-
-            if (!contentType.startsWith('image/')) {
-                throw new Error('URL harus mengarah ke file gambar');
+            if (!response.ok) {
+                throw new Error('URL tidak dapat diakses');
             }
 
-            if (contentLength > config.ROLE_LIMITS.MAX_ICON_SIZE) {
-                throw new Error(`Ukuran icon tidak boleh lebih dari ${config.ROLE_LIMITS.MAX_ICON_SIZE / 1024}KB`);
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.startsWith('image/')) {
+                throw new Error('URL harus mengarah ke file gambar');
             }
 
             return url;
 
         } catch (error) {
-            throw new Error('URL icon tidak valid');
+            throw new Error('URL icon tidak valid: ' + error.message);
         }
     }
 }

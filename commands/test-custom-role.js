@@ -1,16 +1,15 @@
 const { 
-    SlashCommandBuilder, 
+    SlashCommandBuilder,
+    PermissionFlagsBits,
+    ButtonBuilder,
+    ActionRowBuilder,
+    ButtonStyle,
     ModalBuilder,
     TextInputBuilder,
-    TextInputStyle,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    PermissionFlagsBits 
+    TextInputStyle
 } = require('discord.js');
 const RoleManager = require('../utils/role-manager');
 const Logger = require('../utils/logger');
-const config = require('../config');
 const moment = require('moment-timezone');
 
 module.exports = {
@@ -21,7 +20,7 @@ module.exports = {
 
     async execute(interaction) {
         try {
-            const testEmbed = EmbedService.createEmbed({
+            const testEmbed = {
                 title: '🎯 Test Custom Role',
                 description: 'Fitur ini memungkinkan Anda untuk menguji sistem custom role.\nKlik tombol di bawah untuk membuat role test.',
                 fields: [
@@ -36,8 +35,9 @@ module.exports = {
                         inline: false
                     }
                 ],
-                color: config.EMBED_COLORS.PRIMARY
-            });
+                color: 0x007bff,
+                timestamp: new Date()
+            };
 
             // Create button for role creation
             const createButton = new ActionRowBuilder()
@@ -45,26 +45,90 @@ module.exports = {
                     new ButtonBuilder()
                         .setCustomId('create_test_role')
                         .setLabel('🎨 Buat Role Test')
-                        .setStyle(ButtonStyle.Primary)
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('close_test')
+                        .setLabel('❌ Tutup')
+                        .setStyle(ButtonStyle.Danger)
                 );
 
-            await interaction.reply({
+            const message = await interaction.reply({
                 embeds: [testEmbed],
                 components: [createButton],
-                ephemeral: true
+                ephemeral: true,
+                fetchReply: true
+            });
+
+            // Create button collector
+            const collector = message.createMessageComponentCollector({
+                filter: i => i.user.id === interaction.user.id,
+                time: 60000
+            });
+
+            collector.on('collect', async i => {
+                if (i.customId === 'create_test_role') {
+                    const modal = new ModalBuilder()
+                        .setCustomId('test_role_modal')
+                        .setTitle('Buat Role Test');
+
+                    const userInput = new TextInputBuilder()
+                        .setCustomId('user_input')
+                        .setLabel('ID Member (kosongkan untuk diri sendiri)')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(false)
+                        .setPlaceholder('Contoh: 123456789012345678');
+
+                    const roleNameInput = new TextInputBuilder()
+                        .setCustomId('role_name')
+                        .setLabel('Nama Role')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setPlaceholder('Contoh: VIP Test');
+
+                    const roleColorInput = new TextInputBuilder()
+                        .setCustomId('role_color')
+                        .setLabel('Warna Role (HEX)')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setValue('#007bff')
+                        .setPlaceholder('Contoh: #007bff');
+
+                    const durationInput = new TextInputBuilder()
+                        .setCustomId('duration')
+                        .setLabel('Durasi (menit)')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setValue('5')
+                        .setPlaceholder('Contoh: 5');
+
+                    const firstRow = new ActionRowBuilder().addComponents(userInput);
+                    const secondRow = new ActionRowBuilder().addComponents(roleNameInput);
+                    const thirdRow = new ActionRowBuilder().addComponents(roleColorInput);
+                    const fourthRow = new ActionRowBuilder().addComponents(durationInput);
+
+                    modal.addComponents(firstRow, secondRow, thirdRow, fourthRow);
+                    await i.showModal(modal);
+
+                } else if (i.customId === 'close_test') {
+                    await i.update({
+                        content: '✅ Menu ditutup',
+                        embeds: [],
+                        components: [],
+                        ephemeral: true
+                    });
+                }
+            });
+
+            collector.on('end', async (collected, reason) => {
+                if (reason === 'time') {
+                    await message.edit({
+                        components: []
+                    }).catch(() => {});
+                }
             });
 
         } catch (error) {
             console.error('Error in test-custom-role command:', error);
-            await Logger.log('ERROR', {
-                type: 'COMMAND_ERROR',
-                command: 'test-custom-role',
-                error: error.message,
-                userId: interaction.user.id,
-                guildId: interaction.guild.id,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-
             await interaction.reply({
                 content: '❌ Terjadi kesalahan saat membuat role test.',
                 ephemeral: true

@@ -5,9 +5,8 @@ const {
     ButtonStyle,
     PermissionFlagsBits
 } = require('discord.js');
-const EmbedService = require('../utils/embed-builder');
+const EmbedBuilder = require('../utils/embed-builder');
 const Logger = require('../utils/logger');
-const config = require('../config');
 const moment = require('moment-timezone');
 
 module.exports = {
@@ -18,15 +17,15 @@ module.exports = {
 
     async execute(interaction) {
         try {
-            // Create main menu buttons
-            const buttons = new ActionRowBuilder()
+            // Main menu buttons
+            const mainButtons = new ActionRowBuilder()
                 .addComponents(
                     new ButtonBuilder()
                         .setCustomId('view_logs')
                         .setLabel('📜 Lihat Logs')
                         .setStyle(ButtonStyle.Primary),
                     new ButtonBuilder()
-                        .setCustomId('set_log_channel')
+                        .setCustomId('set_channel')
                         .setLabel('📌 Set Channel Log')
                         .setStyle(ButtonStyle.Primary),
                     new ButtonBuilder()
@@ -35,8 +34,15 @@ module.exports = {
                         .setStyle(ButtonStyle.Primary)
                 );
 
-            // Create settings embed
-            const settingsEmbed = EmbedService.createEmbed({
+            const closeButton = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('close_settings')
+                        .setLabel('❌ Tutup')
+                        .setStyle(ButtonStyle.Danger)
+                );
+
+            const settingsEmbed = {
                 title: '⚙️ Pengaturan Bot Custom Role',
                 description: 'Silahkan pilih menu yang tersedia di bawah ini:',
                 fields: [
@@ -56,38 +62,21 @@ module.exports = {
                         inline: true
                     }
                 ],
+                color: 0x007bff,
+                timestamp: new Date(),
                 footer: {
                     text: `Requested by ${interaction.user.tag}`
-                },
-                timestamp: true,
-                color: config.EMBED_COLORS.PRIMARY
-            });
+                }
+            };
 
             await interaction.reply({
                 embeds: [settingsEmbed],
-                components: [buttons],
+                components: [mainButtons, closeButton],
                 ephemeral: true
-            });
-
-            // Log command usage
-            await Logger.log('COMMAND', {
-                type: 'SETTINGS_OPENED',
-                userId: interaction.user.id,
-                guildId: interaction.guild.id,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
 
         } catch (error) {
             console.error('Error in settings command:', error);
-            await Logger.log('ERROR', {
-                type: 'COMMAND_ERROR',
-                command: 'settings',
-                error: error.message,
-                userId: interaction.user.id,
-                guildId: interaction.guild.id,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-
             await interaction.reply({
                 content: '❌ Terjadi kesalahan saat membuka pengaturan.',
                 ephemeral: true

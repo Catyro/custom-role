@@ -1,97 +1,182 @@
 const fs = require('fs').promises;
 const path = require('path');
 const moment = require('moment-timezone');
-const config = require('../config');
 
 class Logger {
-    static async log(category, data) {
+    constructor() {
+        this.logsPath = path.join(__dirname, '../data/logs.json');
+        this.maxLogs = 1000; // Maximum logs to keep per guild
+    }
+
+    /**
+     * Initialize logger
+     * @private
+     */
+    async init() {
         try {
-            const timestamp = moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
-            const logDate = moment().tz('Asia/Jakarta').format('YYYY-MM-DD');
-            const logDir = path.join(__dirname, '../logs');
-            const logFile = path.join(logDir, `${logDate}.json`);
-
-            // Create logs directory if it doesn't exist
-            await fs.mkdir(logDir, { recursive: true });
-
-            // Read existing logs or create new array
-            let logs = [];
-            try {
-                const fileContent = await fs.readFile(logFile, 'utf-8');
-                logs = JSON.parse(fileContent);
-            } catch (error) {
-                // File doesn't exist or is invalid, start with empty array
-            }
-
-            // Add new log entry
-            logs.push({
-                timestamp,
-                category,
-                ...data
-            });
-
-            // Write updated logs
-            await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
-
-            // Cleanup old logs (older than 7 days)
-            await this.cleanupOldLogs();
-
-        } catch (error) {
-            console.error('Error writing log:', error);
+            await fs.access(this.logsPath);
+        } catch {
+            // Create logs file if it doesn't exist
+            await fs.writeFile(this.logsPath, JSON.stringify({}));
         }
     }
 
-    static async getLogs(guildId, limit = 10) {
+    /**
+     * Get logs from file
+     * @private
+     * @returns {Promise<Object>} Logs object
+     */
+    async getLogs() {
+        await this.init();
+        const data = await fs.readFile(this.logsPath, 'utf8');
+        return JSON.parse(data);
+    }
+
+    /**
+     * Save logs to file
+     * @private
+     * @param {Object} logs - Logs object to save
+     */
+    async saveLogs(logs) {
+        await fs.writeFile(this.logsPath, JSON.stringify(logs, null, 2));
+    }
+
+    /**
+     * Add a log entry
+     * @param {string} type - Type of log
+     * @param {Object} data - Log data
+     */
+    async log(type, data) {
         try {
-            const logDir = path.join(__dirname, '../logs');
-            const files = await fs.readdir(logDir);
-            
-            // Get all log entries from the last 7 days
-            let allLogs = [];
-            for (const file of files) {
-                if (!file.endsWith('.json')) continue;
-                
-                const filePath = path.join(logDir, file);
-                const content = await fs.readFile(filePath, 'utf-8');
-                const logs = JSON.parse(content);
-                
-                // Filter logs for specific guild
-                const guildLogs = logs.filter(log => log.guildId === guildId);
-                allLogs.push(...guildLogs);
+            const logs = await this.getLogs();
+            const guildId = data.guildId || 'global';
+
+            if (!logs[guildId]) {
+                logs[guildId] = [];
             }
 
-            // Sort by timestamp descending and limit
-            return allLogs
-                .sort((a, b) => moment(b.timestamp).valueOf() - moment(a.timestamp).valueOf())
-                .slice(0, limit);
+            // Create log entry
+            const logEntry = {
+                id: this.generateLogId(),
+                type,
+                ...data,
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+            };
+
+            // Add new log
+            logs[guildId].unshift(logEntry);
+
+            // Trim logs if exceeding maximum
+            if (logs[guildId].length > this.maxLogs) {
+                logs[guildId] = logs[guildId].slice(0, this.maxLogs);
+            }
+
+            await this.saveLogs(logs);
+            return logEntry;
 
         } catch (error) {
-            console.error('Error reading logs:', error);
-            return [];
+            console.error('Error adding log:', error);
+            throw error;
         }
     }
 
-    static async cleanupOldLogs() {
+    /**
+     * Get logs for a guild
+     * @param {string} guildId - ID of the guild
+     * @param {number} limit - Maximum number of logs to return
+     * @returns {Promise<Array>} Array of logs
+     */
+    async getGuildLogs(guildId, limit = 10) {
         try {
-            const logDir = path.join(__dirname, '../logs');
-            const files = await fs.readdir(logDir);
-            const now = moment();
-
-            for (const file of files) {
-                if (!file.endsWith('.json')) continue;
-
-                const filePath = path.join(logDir, file);
-                const fileDate = moment(file.replace('.json', ''));
-
-                // Delete files older than 7 days
-                if (now.diff(fileDate, 'days') > 7) {
-                    await fs.unlink(filePath);
-                }
-            }
+            const logs = await this.getLogs();
+            const guildLogs = logs[guildId] || [];
+            return guildLogs.slice(0, limit);
         } catch (error) {
-            console.error('Error cleaning up logs:', error);
+            console.error('Error getting guild logs:', error);
+            throw error;
         }
+    }
+
+    /**
+     * Clear logs for a guild
+     * @param {string} guildId - ID of the guild
+     */
+    async clearGuildLogs(guildId) {
+        try {
+            const logs = await this.getLogs();
+            logs[guildId] = [];
+            await this.saveLogs(logs);
+        } catch (error) {
+            console.error('Error clearing guild logs:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Generate a unique log ID
+     * @private
+     * @returns {string} Unique ID
+     */
+    generateLogId() {
+        return `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    /**
+     * Format log message
+     * @param {Object} log - Log entry to format
+     * @returns {string} Formatted log message
+     */
+    formatLogMessage(log) {
+        let message = '';
+
+        switch (log.type) {
+            case 'ROLE_CREATED':
+                message = `Role dibuat untuk ${log.userId}`;
+                break;
+            case 'ROLE_EDITED':
+                message = `Role ${log.roleId} diupdate`;
+                break;
+            case 'ROLE_REMOVED':
+                message = `Role ${log.roleId} dihapus`;
+                break;
+            case 'TEST_ROLE_CREATED':
+                message = `Role test dibuat untuk ${log.userId} (durasi: ${log.duration}m)`;
+                break;
+            case 'TEST_ROLE_EXPIRED':
+                message = `Role test ${log.roleId} berakhir`;
+                break;
+            case 'MEMBER_BOOSTED':
+                message = `${log.userId} boost server`;
+                break;
+            case 'MEMBER_UNBOOSTED':
+                message = `${log.userId} berhenti boost server`;
+                break;
+            case 'BOT_STARTUP':
+                message = `Bot started (${log.totalCommands} commands loaded)`;
+                break;
+            case 'ERROR':
+                message = `Error: ${log.error}`;
+                break;
+            default:
+                message = `${log.type}: ${JSON.stringify(log)}`;
+        }
+
+        return message;
+    }
+
+    /**
+     * Get formatted logs for display
+     * @param {string} guildId - ID of the guild
+     * @param {number} limit - Maximum number of logs to return
+     * @returns {Promise<Array>} Array of formatted logs
+     */
+    async getFormattedLogs(guildId, limit = 10) {
+        const logs = await this.getGuildLogs(guildId, limit);
+        return logs.map(log => ({
+            timestamp: moment(log.timestamp).format('DD/MM HH:mm:ss'),
+            message: this.formatLogMessage(log)
+        }));
     }
 }
 
-module.exports = Logger;
+module.exports = new Logger();
