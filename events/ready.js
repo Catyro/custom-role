@@ -1,94 +1,109 @@
-const { Events, ActivityType } = require('discord.js');
 const Logger = require('../utils/logger');
-const config = require('../config');
 const moment = require('moment-timezone');
 
-class ReadyHandler {
-    static async handle(client) {
+module.exports = {
+    name: 'ready',
+    once: true,
+    async execute(client) {
         try {
-            await this.initializeBot(client);
-            await this.logStartup(client);
+            // Set bot presence
+            client.user.setPresence({
+                activities: [{
+                    name: '/help',
+                    type: 2 // "Listening to"
+                }],
+                status: 'online'
+            });
+
+            // Load commands
+            const totalCommands = client.commands.size;
+
+            // Log bot startup
+            await Logger.log('BOT_STARTUP', {
+                type: 'STARTUP',
+                totalCommands: totalCommands,
+                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss'),
+                version: require('../package.json').version
+            });
+
+            console.log(`[${moment().tz('Asia/Jakarta').format('HH:mm:ss')}] ${client.user.tag} siap dengan ${totalCommands} commands!`);
+
+            // Check and clean expired test roles
+            await checkExpiredTestRoles(client);
+
+            // Set interval to check expired test roles every minute
+            setInterval(() => checkExpiredTestRoles(client), 60000);
+
         } catch (error) {
             console.error('Error in ready event:', error);
             await Logger.log('ERROR', {
-                type: 'STARTUP_ERROR',
+                type: 'READY_ERROR',
                 error: error.message,
-                stack: error.stack,
                 timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
             });
         }
     }
+};
 
-    static async initializeBot(client) {
-        await client.user.setPresence({
-            activities: [{
-                name: 'Boosted Members',
-                type: ActivityType.Watching
-            }],
-            status: 'online'
-        });
-    }
+async function checkExpiredTestRoles(client) {
+    try {
+        const guilds = client.guilds.cache;
 
-    static async logStartup(client) {
-        const totalUsers = client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
-        const currentTime = moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+        for (const [, guild] of guilds) {
+            const testRoles = guild.roles.cache.filter(role => 
+                role.name.startsWith('[Test]')
+            );
 
-        // Log startup info
-        const startupInfo = {
-            botTag: client.user.tag,
-            totalServers: client.guilds.cache.size,
-            totalUsers: totalUsers,
-            totalCommands: client.commands.size,
-            startupTime: currentTime,
-            startedBy: 'Catyro'
-        };
+            for (const [, role] of testRoles) {
+                // Check role creation time
+                const roleAge = Date.now() - role.createdTimestamp;
+                
+                // If role is older than 2 minutes (or custom duration from data)
+                if (roleAge >= 120000) { // Default 2 minutes
+                    try {
+                        // Get the member who has this role
+                        const member = role.members.first();
+                        
+                        if (member) {
+                            // Remove the role
+                            await member.roles.remove(role);
+                            
+                            // Delete the role
+                            await role.delete('Test role expired');
 
-        // Console logs with colors
-        console.log('\x1b[36m%s\x1b[0m', '═'.repeat(50));
-        console.log('\x1b[32m%s\x1b[0m', '✅ Bot is now online!');
-        console.log('\x1b[33m%s\x1b[0m', `📡 Connected as: ${startupInfo.botTag}`);
-        console.log('\x1b[33m%s\x1b[0m', `👥 Serving: ${startupInfo.totalServers} servers`);
-        console.log('\x1b[33m%s\x1b[0m', `👤 Users: ${startupInfo.totalUsers}`);
-        console.log('\x1b[33m%s\x1b[0m', `⌚ Time: ${startupInfo.startupTime}`);
-        console.log('\x1b[33m%s\x1b[0m', `📋 Commands: ${startupInfo.totalCommands}`);
-        console.log('\x1b[36m%s\x1b[0m', '═'.repeat(50));
+                            // Log test role expiration
+                            await Logger.log('TEST_ROLE_EXPIRED', {
+                                guildId: guild.id,
+                                type: 'TEST_ROLE_EXPIRED',
+                                roleId: role.id,
+                                userId: member.id,
+                                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                            });
 
-        // Log to logger system
-        await Logger.log('SYSTEM', {
-            type: 'BOT_STARTUP',
-            ...startupInfo
-        });
-
-        // Log detailed server information
-        for (const [, guild] of client.guilds.cache) {
-            const guildInfo = {
-                id: guild.id,
-                name: guild.name,
-                members: guild.memberCount,
-                channels: guild.channels.cache.size,
-                roles: guild.roles.cache.size
-            };
-
-            console.log('\x1b[34m%s\x1b[0m', `📌 Server: ${guildInfo.name} (${guildInfo.id})`);
-            console.log('\x1b[34m%s\x1b[0m', `   ├ Members: ${guildInfo.members}`);
-            console.log('\x1b[34m%s\x1b[0m', `   ├ Channels: ${guildInfo.channels}`);
-            console.log('\x1b[34m%s\x1b[0m', `   └ Roles: ${guildInfo.roles}`);
-
-            await Logger.log('SYSTEM', {
-                type: 'GUILD_INFO',
-                ...guildInfo,
-                timestamp: currentTime
-            });
+                            // Send DM to member
+                            await member.send({
+                                content: `⌛ Role test kamu di server ${guild.name} telah berakhir.`
+                            }).catch(() => {});
+                        }
+                    } catch (error) {
+                        console.error(`Error removing expired test role ${role.id}:`, error);
+                        await Logger.log('ERROR', {
+                            guildId: guild.id,
+                            type: 'TEST_ROLE_EXPIRE_ERROR',
+                            error: error.message,
+                            roleId: role.id,
+                            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                        });
+                    }
+                }
+            }
         }
-
-        console.log('\x1b[32m%s\x1b[0m', '✨ All systems operational!');
+    } catch (error) {
+        console.error('Error checking expired test roles:', error);
+        await Logger.log('ERROR', {
+            type: 'CHECK_EXPIRED_ROLES_ERROR',
+            error: error.message,
+            timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+        });
     }
 }
-
-module.exports = {
-    name: Events.ClientReady,
-    once: true,
-    async execute(client) {
-        await ReadyHandler.handle(client);
-    }
-};
