@@ -1,153 +1,238 @@
 const fs = require('fs').promises;
 const path = require('path');
-const moment = require('moment-timezone');
+const moment = require('moment');
 
 class Logger {
     static logPath = path.join(__dirname, '../data/logs.json');
-    static maxLogs = 1000; // Maximum number of logs to keep
+    static MAX_LOGS = 1000; // Maximum number of logs to keep
 
     /**
-     * Log an event
-     * @param {string} type - Type of log
+     * Initialize logger
+     * @returns {Promise<void>}
+     */
+    static async init() {
+        try {
+            await this.checkLogFile();
+        } catch (error) {
+            console.error('Error initializing logger:', error);
+        }
+    }
+
+    /**
+     * Check and create log file if doesn't exist
+     * @returns {Promise<void>}
+     */
+    static async checkLogFile() {
+        try {
+            await fs.access(this.logPath);
+        } catch {
+            await fs.writeFile(this.logPath, JSON.stringify([], null, 2));
+        }
+    }
+
+    /**
+     * Add a new log entry
+     * @param {string} type - Log type
      * @param {Object} data - Log data
+     * @returns {Promise<void>}
      */
     static async log(type, data) {
         try {
-            let logs = [];
-            try {
-                const content = await fs.readFile(this.logPath, 'utf8');
-                logs = JSON.parse(content);
-            } catch (error) {
-                if (error.code !== 'ENOENT') throw error;
-            }
+            await this.checkLogFile();
 
-            // Add new log entry
+            // Read current logs
+            const logs = JSON.parse(await fs.readFile(this.logPath, 'utf-8'));
+
+            // Add new log
             const logEntry = {
-                type,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss'),
-                ...data
+                id: this.generateLogId(),
+                type: type,
+                ...data,
+                timestamp: data.timestamp || moment().utc().format('YYYY-MM-DD HH:mm:ss')
             };
 
-            logs.unshift(logEntry);
+            logs.unshift(logEntry); // Add to beginning of array
 
-            // Keep only the latest maxLogs entries
-            if (logs.length > this.maxLogs) {
-                logs = logs.slice(0, this.maxLogs);
+            // Keep only the latest MAX_LOGS entries
+            if (logs.length > this.MAX_LOGS) {
+                logs.length = this.MAX_LOGS;
             }
 
             // Write back to file
             await fs.writeFile(this.logPath, JSON.stringify(logs, null, 2));
 
-            return logEntry;
+            // Console log for debugging
+            console.log(`[${logEntry.timestamp}] ${type}:`, data);
 
         } catch (error) {
-            console.error('Error logging event:', error);
-            throw error;
+            console.error('Error logging:', error);
         }
     }
 
     /**
-     * Get formatted logs for display
-     * @param {string} guildId - Guild ID to filter logs
+     * Get formatted logs
+     * @param {string} guildId - Discord guild ID
      * @param {number} limit - Maximum number of logs to return
-     * @returns {Array} Formatted log entries
+     * @returns {Promise<Array>} Formatted logs
      */
     static async getFormattedLogs(guildId, limit = 15) {
         try {
-            const content = await fs.readFile(this.logPath, 'utf8');
-            let logs = JSON.parse(content);
+            await this.checkLogFile();
 
-            // Filter logs by guild if provided
-            if (guildId) {
-                logs = logs.filter(log => log.guildId === guildId);
-            }
-
-            // Limit number of logs
-            logs = logs.slice(0, limit);
-
-            // Format logs for display
-            return logs.map(log => {
-                const timestamp = moment(log.timestamp).tz('Asia/Jakarta').format('DD/MM HH:mm');
-                let message = '';
-                let emoji = '';
-
-                switch (log.type) {
-                    case 'ROLE_CREATED':
-                        emoji = '🎨';
-                        message = `Custom role dibuat untuk <@${log.userId}>`;
-                        break;
-                    case 'ROLE_EDITED':
-                        emoji = '✏️';
-                        message = `Role diupdate oleh <@${log.userId}>`;
-                        if (log.updates) {
-                            message += `\nPerubahan: ${Object.entries(log.updates)
-                                .map(([key, value]) => `${key}: ${value}`)
-                                .join(', ')}`;
-                        }
-                        break;
-                    case 'ROLE_REMOVED':
-                        emoji = '🗑️';
-                        message = `Custom role dihapus dari <@${log.userId}>`;
-                        break;
-                    case 'MEMBER_BOOSTED':
-                        emoji = '🌟';
-                        message = `<@${log.userId}> mulai boost server`;
-                        break;
-                    case 'MEMBER_UNBOOSTED':
-                        emoji = '💫';
-                        message = `<@${log.userId}> berhenti boost server`;
-                        break;
-                    case 'TEST_ROLE_CREATED':
-                        emoji = '🎯';
-                        message = `Role test dibuat untuk <@${log.userId}> (${log.duration/60000} menit)`;
-                        break;
-                    case 'TEST_ROLE_EXPIRED':
-                        emoji = '⌛';
-                        message = `Role test berakhir untuk <@${log.userId}>`;
-                        break;
-                    case 'COMMAND_EXECUTE':
-                        emoji = '🤖';
-                        message = `Command /${log.command || 'unknown'} digunakan oleh <@${log.userId}>`;
-                        break;
-                    case 'ERROR':
-                        emoji = '❌';
-                        message = `Error: ${log.error}`;
-                        break;
-                    case 'CHANNEL_UPDATE':
-                        emoji = '📌';
-                        message = `Channel log diubah ke <#${log.channelId}>`;
-                        break;
-                    case 'BOT_STARTUP':
-                        emoji = '🚀';
-                        message = `Bot dimulai dengan ${log.totalCommands} commands`;
-                        break;
-                    default:
-                        emoji = 'ℹ️';
-                        message = log.message || 'Unknown log entry';
-                }
-
-                return {
-                    timestamp,
-                    message: `\`${timestamp}\` ${emoji} ${message}`
-                };
-            });
+            const logs = JSON.parse(await fs.readFile(this.logPath, 'utf-8'));
+            
+            return logs
+                .filter(log => log.guildId === guildId)
+                .slice(0, limit)
+                .map(log => this.formatLogEntry(log));
 
         } catch (error) {
-            console.error('Error getting formatted logs:', error);
+            console.error('Error getting logs:', error);
             return [];
         }
     }
 
     /**
-     * Clear all logs
+     * Format a log entry for display
+     * @param {Object} log - Log entry
+     * @returns {Object} Formatted log
      */
-    static async clearLogs() {
-        try {
-            await fs.writeFile(this.logPath, '[]');
-        } catch (error) {
-            console.error('Error clearing logs:', error);
-            throw error;
+    static formatLogEntry(log) {
+        const timestamp = moment(log.timestamp).format('DD/MM HH:mm');
+        let emoji, message;
+
+        switch (log.type) {
+            case 'ROLE_CREATE':
+                emoji = '👑';
+                message = `Role dibuat untuk <@${log.userId}>`;
+                break;
+
+            case 'ROLE_UPDATE':
+                emoji = '✏️';
+                message = `Role diupdate oleh <@${log.updatedBy}>`;
+                break;
+
+            case 'ROLE_DELETE':
+                emoji = '🗑️';
+                message = `Role "${log.roleName}" dihapus`;
+                break;
+
+            case 'TEST_ROLE_CREATE':
+                emoji = '🎯';
+                message = `Test role dibuat untuk <@${log.userId}>`;
+                break;
+
+            case 'TEST_ROLE_EXPIRE':
+                emoji = '⌛';
+                message = `Test role expired untuk <@${log.userId}>`;
+                break;
+
+            case 'CHANNEL_SET':
+                emoji = '📌';
+                message = `Channel log diatur ke <#${log.channelId}>`;
+                break;
+
+            case 'ERROR':
+                emoji = '❌';
+                message = `Error: ${log.error}`;
+                break;
+
+            case 'COMMAND_EXECUTE':
+                emoji = '🤖';
+                message = `Command "${log.type}" digunakan oleh <@${log.userId}>`;
+                break;
+
+            default:
+                emoji = 'ℹ️';
+                message = 'Unknown log entry';
         }
+
+        return {
+            timestamp,
+            emoji,
+            message,
+            original: log
+        };
+    }
+
+    /**
+     * Generate unique log ID
+     * @returns {string} Unique ID
+     */
+    static generateLogId() {
+        return `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    /**
+     * Clear old logs
+     * @param {string} guildId - Discord guild ID
+     * @param {number} daysToKeep - Days of logs to keep
+     * @returns {Promise<number>} Number of logs deleted
+     */
+    static async clearOldLogs(guildId, daysToKeep = 30) {
+        try {
+            await this.checkLogFile();
+
+            const logs = JSON.parse(await fs.readFile(this.logPath, 'utf-8'));
+            const cutoffDate = moment().subtract(daysToKeep, 'days');
+
+            const newLogs = logs.filter(log => 
+                log.guildId !== guildId || 
+                moment(log.timestamp).isAfter(cutoffDate)
+            );
+
+            const deletedCount = logs.length - newLogs.length;
+
+            await fs.writeFile(this.logPath, JSON.stringify(newLogs, null, 2));
+
+            return deletedCount;
+
+        } catch (error) {
+            console.error('Error clearing old logs:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * Get log statistics
+     * @param {string} guildId - Discord guild ID
+     * @returns {Promise<Object>} Log statistics
+     */
+    static async getLogStats(guildId) {
+        try {
+            await this.checkLogFile();
+
+            const logs = JSON.parse(await fs.readFile(this.logPath, 'utf-8'));
+            const guildLogs = logs.filter(log => log.guildId === guildId);
+
+            return {
+                total: guildLogs.length,
+                types: this.countLogTypes(guildLogs),
+                lastActivity: guildLogs[0]?.timestamp || 'No logs',
+                firstLog: guildLogs[guildLogs.length - 1]?.timestamp || 'No logs'
+            };
+
+        } catch (error) {
+            console.error('Error getting log stats:', error);
+            return {
+                total: 0,
+                types: {},
+                lastActivity: 'Error',
+                firstLog: 'Error'
+            };
+        }
+    }
+
+    /**
+     * Count log types
+     * @param {Array} logs - Array of logs
+     * @returns {Object} Count of each log type
+     */
+    static countLogTypes(logs) {
+        return logs.reduce((acc, log) => {
+            acc[log.type] = (acc[log.type] || 0) + 1;
+            return acc;
+        }, {});
     }
 }
 
