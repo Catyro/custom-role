@@ -1,18 +1,59 @@
 const { PermissionsBitField } = require('discord.js');
+const fs = require('fs').promises;
+const path = require('path');
 const Validator = require('./validator');
 const Logger = require('./logger');
-const moment = require('moment');
 
 class RoleManager {
+    static #rolesPath = path.join(__dirname, '..', 'data', 'roles.json');
+
+    /**
+     * Creates a test role for a user
+     * @param {Guild} guild - Discord guild
+     * @param {Object} options - Role options
+     * @returns {Promise<Role>} Created role
+     */
+    static async createTestRole(guild, options) {
+        try {
+            const { userId, name, color } = options;
+
+            // Create role with specific permissions
+            const role = await guild.roles.create({
+                name: name || '[TEST] Custom Role',
+                color: color || '#99AAB5',
+                permissions: [
+                    PermissionsBitField.Flags.ViewChannel,
+                    PermissionsBitField.Flags.SendMessages,
+                    PermissionsBitField.Flags.ReadMessageHistory
+                ],
+                reason: `Test role created for user ID: ${userId}`
+            });
+
+            // Save role data
+            await this.#saveRoleData(guild.id, {
+                roleId: role.id,
+                userId: userId,
+                type: 'TEST',
+                createdAt: '2025-01-15 10:04:15',
+                createdBy: 'Catyro'
+            });
+
+            return role;
+        } catch (error) {
+            console.error('Error creating test role:', error);
+            throw error;
+        }
+    }
+
     /**
      * Creates a custom role for a booster
      * @param {Guild} guild - Discord guild
      * @param {Object} options - Role options
      * @returns {Promise<Role>} Created role
      */
-    static async createCustomRole(guild, options) {
+    static async createBoostRole(guild, options) {
         try {
-            const { userId, name, color, icon = null } = options;
+            const { userId, name, color } = options;
 
             // Validate role name
             const nameValidation = Validator.validateRoleName(name);
@@ -20,237 +61,141 @@ class RoleManager {
                 throw new Error(nameValidation.message);
             }
 
-            // Validate color
-            const validColor = Validator.validateColor(color);
-            if (!validColor) {
-                throw new Error('Warna role tidak valid.');
-            }
-
-            // Validate icon if provided
-            if (icon && !Validator.validateIconUrl(icon)) {
-                throw new Error('URL icon tidak valid.');
-            }
-
             // Create role
             const role = await guild.roles.create({
                 name: name,
-                color: validColor,
-                hoist: true, // Show members separately
-                mentionable: true,
-                reason: `Custom role created for user ID: ${userId}`
+                color: color || '#F47FFF',
+                permissions: [
+                    PermissionsBitField.Flags.ViewChannel,
+                    PermissionsBitField.Flags.SendMessages,
+                    PermissionsBitField.Flags.ReadMessageHistory
+                ],
+                reason: `Boost role created for user ID: ${userId}`
             });
 
-            // Set icon if provided
-            if (icon) {
-                await role.setIcon(icon)
-                    .catch(error => {
-                        console.error('Error setting role icon:', error);
-                        Logger.log('ERROR', {
-                            type: 'ROLE_ICON_ERROR',
-                            roleId: role.id,
-                            error: error.message,
-                            timestamp: '2025-01-15 08:13:20'
-                        });
-                    });
-            }
-
-            // Log role creation
-            await Logger.log('ROLE_CREATE', {
-                type: 'CUSTOM_ROLE_CREATE',
-                guildId: guild.id,
+            // Save role data
+            await this.#saveRoleData(guild.id, {
                 roleId: role.id,
                 userId: userId,
-                timestamp: '2025-01-15 08:13:20'
+                type: 'BOOST',
+                createdAt: '2025-01-15 10:04:15',
+                createdBy: 'Catyro'
             });
 
             return role;
-
         } catch (error) {
+            console.error('Error creating boost role:', error);
             throw error;
         }
     }
 
     /**
-     * Creates a temporary test role
-     * @param {Guild} guild - Discord guild
-     * @param {Object} options - Role options
-     * @returns {Promise<Role>} Created test role
-     */
-    static async createTestRole(guild, options) {
-        try {
-            const { userId, name, color, duration = 120000 } = options; // Default 2 minutes
-
-            // Create role with [TEST] prefix
-            const testRole = await guild.roles.create({
-                name: `[TEST] ${name}`,
-                color: color,
-                hoist: true,
-                mentionable: true,
-                reason: `Test role created for user ID: ${userId}`
-            });
-
-            // Log test role creation
-            await Logger.log('ROLE_CREATE', {
-                type: 'TEST_ROLE_CREATE',
-                guildId: guild.id,
-                roleId: testRole.id,
-                userId: userId,
-                duration: duration,
-                timestamp: '2025-01-15 08:13:20'
-            });
-
-            return testRole;
-
-        } catch (error) {
-            throw error;
-        }
-    }
-
-    /**
-     * Updates an existing role
+     * Updates a role's properties
      * @param {Role} role - Discord role
      * @param {Object} options - Update options
-     * @returns {Promise<Role>} Updated role
      */
     static async updateRole(role, options) {
         try {
             const updates = {};
 
-            // Validate and set name
             if (options.name) {
                 const nameValidation = Validator.validateRoleName(options.name);
-                if (!nameValidation.isValid) {
-                    throw new Error(nameValidation.message);
+                if (nameValidation.isValid) {
+                    updates.name = options.name;
                 }
-                updates.name = options.name;
             }
 
-            // Validate and set color
             if (options.color) {
                 const validColor = Validator.validateColor(options.color);
-                if (!validColor) {
-                    throw new Error('Warna role tidak valid.');
+                if (validColor) {
+                    updates.color = validColor;
                 }
-                updates.color = validColor;
             }
 
-            // Update role
-            const updatedRole = await role.edit(updates, 
-                `Role updated by user ID: ${options.updatedBy}`);
-
-            // Update icon if provided
             if (options.icon) {
-                if (!Validator.validateIconUrl(options.icon)) {
-                    throw new Error('URL icon tidak valid.');
+                const validIcon = await Validator.validateIconUrl(options.icon);
+                if (validIcon) {
+                    updates.icon = options.icon;
                 }
-                await updatedRole.setIcon(options.icon);
             }
 
-            // Log role update
-            await Logger.log('ROLE_UPDATE', {
-                type: 'ROLE_UPDATE',
-                guildId: role.guild.id,
-                roleId: role.id,
-                updatedBy: options.updatedBy,
-                changes: updates,
-                timestamp: '2025-01-15 08:13:20'
-            });
-
-            return updatedRole;
-
+            if (Object.keys(updates).length > 0) {
+                await role.edit(updates);
+                
+                await Logger.log('ROLE_UPDATE', {
+                    guildId: role.guild.id,
+                    type: 'ROLE_UPDATE',
+                    roleId: role.id,
+                    updates: updates,
+                    updatedAt: '2025-01-15 10:04:15',
+                    updatedBy: 'Catyro'
+                });
+            }
         } catch (error) {
+            console.error('Error updating role:', error);
             throw error;
         }
     }
 
     /**
-     * Deletes a role
-     * @param {Role} role - Discord role
-     * @param {string} reason - Reason for deletion
-     * @returns {Promise<void>}
+     * Gets all roles for a guild
+     * @param {string} guildId - Guild ID
+     * @returns {Promise<Array>} Array of roles
      */
-    static async deleteRole(role, reason = '') {
+    static async getRoles(guildId) {
         try {
-            const roleData = {
-                id: role.id,
-                guildId: role.guild.id,
-                name: role.name
-            };
-
-            await role.delete(reason);
-
-            // Log role deletion
-            await Logger.log('ROLE_DELETE', {
-                type: 'ROLE_DELETE',
-                guildId: roleData.guildId,
-                roleId: roleData.id,
-                roleName: roleData.name,
-                reason: reason,
-                timestamp: '2025-01-15 08:13:20'
-            });
-
+            const roles = await this.#loadRoles();
+            return roles.filter(role => role.guildId === guildId);
         } catch (error) {
+            console.error('Error getting roles:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Saves role data to file
+     * @private
+     */
+    static async #saveRoleData(guildId, roleData) {
+        try {
+            const roles = await this.#loadRoles();
+            roles.push({
+                guildId,
+                ...roleData
+            });
+            await fs.writeFile(this.#rolesPath, JSON.stringify(roles, null, 2));
+        } catch (error) {
+            console.error('Error saving role data:', error);
             throw error;
         }
     }
 
     /**
-     * Gets role data including members
-     * @param {Role} role - Discord role
-     * @returns {Object} Role data
+     * Loads roles from file
+     * @private
      */
-    static getRoleData(role) {
-        return {
-            id: role.id,
-            name: role.name,
-            color: role.hexColor,
-            memberCount: role.members.size,
-            createdAt: moment(role.createdAt).utc().format('YYYY-MM-DD HH:mm:ss'),
-            isHoisted: role.hoist,
-            isMentionable: role.mentionable,
-            position: role.position,
-            members: Array.from(role.members.values()).map(member => ({
-                id: member.id,
-                tag: member.user.tag,
-                joinedAt: moment(member.joinedAt).utc().format('YYYY-MM-DD HH:mm:ss')
-            }))
-        };
-    }
-
-    /**
-     * Checks if a role is a test role
-     * @param {Role} role - Discord role
-     * @returns {boolean}
-     */
-    static isTestRole(role) {
-        return role.name.startsWith('[TEST]');
-    }
-
-    /**
-     * Gets all test roles in a guild
-     * @param {Guild} guild - Discord guild
-     * @returns {Collection<Role>}
-     */
-    static getTestRoles(guild) {
-        return guild.roles.cache.filter(role => this.isTestRole(role));
-    }
-
-    /**
-     * Checks if a member can manage a specific role
-     * @param {GuildMember} member - Discord guild member
-     * @param {Role} role - Discord role
-     * @returns {boolean}
-     */
-    static canManageRole(member, role) {
-        if (!member || !role) return false;
-
-        // Check if member has MANAGE_ROLES permission
-        if (!member.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
-            return false;
+    static async #loadRoles() {
+        try {
+            const data = await fs.readFile(this.#rolesPath, 'utf8');
+            return JSON.parse(data);
+        } catch (error) {
+            return [];
         }
+    }
 
-        // Check if member's highest role is higher than the target role
-        return member.roles.highest.position > role.position;
+    /**
+     * Removes a role's data from storage
+     * @param {string} roleId - Role ID to remove
+     */
+    static async removeRoleData(roleId) {
+        try {
+            const roles = await this.#loadRoles();
+            const filteredRoles = roles.filter(role => role.roleId !== roleId);
+            await fs.writeFile(this.#rolesPath, JSON.stringify(filteredRoles, null, 2));
+        } catch (error) {
+            console.error('Error removing role data:', error);
+            throw error;
+        }
     }
 }
 
