@@ -1,207 +1,256 @@
-const { roleData } = require('../data/roles.json');
-const Logger = require('./logger');
+const { PermissionsBitField } = require('discord.js');
 const Validator = require('./validator');
-const moment = require('moment-timezone');
+const Logger = require('./logger');
+const moment = require('moment');
 
 class RoleManager {
     /**
-     * Create a custom role for a booster
-     * @param {GuildMember} member - The member to create the role for
+     * Creates a custom role for a booster
+     * @param {Guild} guild - Discord guild
      * @param {Object} options - Role options
-     * @returns {Promise<Role>} The created role
+     * @returns {Promise<Role>} Created role
      */
-    static async createCustomRole(member, options = {}) {
+    static async createCustomRole(guild, options) {
         try {
-            const { name, color, icon } = options;
+            const { userId, name, color, icon = null } = options;
 
-            // Validate inputs
-            if (!Validator.isValidRoleName(name)) {
-                throw new Error('Invalid role name');
-            }
-            if (!Validator.isValidColor(color)) {
-                throw new Error('Invalid color code');
-            }
-            if (icon && !Validator.isValidImageUrl(icon)) {
-                throw new Error('Invalid icon URL');
+            // Validate role name
+            const nameValidation = Validator.validateRoleName(name);
+            if (!nameValidation.isValid) {
+                throw new Error(nameValidation.message);
             }
 
-            // Create the role
-            const role = await member.guild.roles.create({
-                name: name,
-                color: color,
-                hoist: true,
-                mentionable: true,
-                reason: `Custom role for ${member.user.tag}`,
-                icon: icon || undefined
-            });
+            // Validate color
+            const validColor = Validator.validateColor(color);
+            if (!validColor) {
+                throw new Error('Warna role tidak valid.');
+            }
 
-            // Give the role to the member
-            await member.roles.add(role);
+            // Validate icon if provided
+            if (icon && !Validator.validateIconUrl(icon)) {
+                throw new Error('URL icon tidak valid.');
+            }
 
-            // Save role data
-            await this.saveRoleData(member.guild.id, role.id, {
-                userId: member.id,
-                createdAt: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-
-            // Log role creation
-            await Logger.log('ROLE_CREATED', {
-                guildId: member.guild.id,
-                type: 'ROLE_CREATE',
-                userId: member.id,
-                roleId: role.id,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-            });
-
-            return role;
-
-        } catch (error) {
-            console.error('Error creating custom role:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Create a temporary test role
-     * @param {Guild} guild - The guild to create the role in
-     * @param {Object} options - Role options
-     * @returns {Promise<Role>} The created role
-     */
-    static async createTestRole(guild, options = {}) {
-        try {
-            const { userId, name, color, duration } = options;
-
-            // Create the role
+            // Create role
             const role = await guild.roles.create({
                 name: name,
-                color: color,
-                hoist: true,
+                color: validColor,
+                hoist: true, // Show members separately
                 mentionable: true,
-                reason: `Test role (${duration/60000} minutes)`
+                reason: `Custom role created for user ID: ${userId}`
             });
 
-            // Give the role to the member
-            const member = await guild.members.fetch(userId);
-            await member.roles.add(role);
+            // Set icon if provided
+            if (icon) {
+                await role.setIcon(icon)
+                    .catch(error => {
+                        console.error('Error setting role icon:', error);
+                        Logger.log('ERROR', {
+                            type: 'ROLE_ICON_ERROR',
+                            roleId: role.id,
+                            error: error.message,
+                            timestamp: '2025-01-15 08:13:20'
+                        });
+                    });
+            }
 
-            // Log test role creation
-            await Logger.log('TEST_ROLE_CREATED', {
+            // Log role creation
+            await Logger.log('ROLE_CREATE', {
+                type: 'CUSTOM_ROLE_CREATE',
                 guildId: guild.id,
-                type: 'TEST_ROLE_CREATE',
-                userId: userId,
                 roleId: role.id,
-                duration: duration,
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                userId: userId,
+                timestamp: '2025-01-15 08:13:20'
             });
 
             return role;
 
         } catch (error) {
-            console.error('Error creating test role:', error);
             throw error;
         }
     }
 
     /**
-     * Edit an existing custom role
-     * @param {Role} role - The role to edit
-     * @param {Object} options - New role options
-     * @returns {Promise<Role>} The updated role
+     * Creates a temporary test role
+     * @param {Guild} guild - Discord guild
+     * @param {Object} options - Role options
+     * @returns {Promise<Role>} Created test role
      */
-    static async editRole(role, options = {}) {
+    static async createTestRole(guild, options) {
         try {
-            const { name, color, icon } = options;
+            const { userId, name, color, duration = 120000 } = options; // Default 2 minutes
 
-            // Validate inputs
-            if (!Validator.isValidRoleName(name)) {
-                throw new Error('Invalid role name');
-            }
-            if (!Validator.isValidColor(color)) {
-                throw new Error('Invalid color code');
-            }
-            if (icon && !Validator.isValidImageUrl(icon)) {
-                throw new Error('Invalid icon URL');
-            }
-
-            // Update the role
-            const updatedRole = await role.edit({
-                name: name,
+            // Create role with [TEST] prefix
+            const testRole = await guild.roles.create({
+                name: `[TEST] ${name}`,
                 color: color,
-                icon: icon || role.icon
+                hoist: true,
+                mentionable: true,
+                reason: `Test role created for user ID: ${userId}`
             });
 
+            // Log test role creation
+            await Logger.log('ROLE_CREATE', {
+                type: 'TEST_ROLE_CREATE',
+                guildId: guild.id,
+                roleId: testRole.id,
+                userId: userId,
+                duration: duration,
+                timestamp: '2025-01-15 08:13:20'
+            });
+
+            return testRole;
+
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    /**
+     * Updates an existing role
+     * @param {Role} role - Discord role
+     * @param {Object} options - Update options
+     * @returns {Promise<Role>} Updated role
+     */
+    static async updateRole(role, options) {
+        try {
+            const updates = {};
+
+            // Validate and set name
+            if (options.name) {
+                const nameValidation = Validator.validateRoleName(options.name);
+                if (!nameValidation.isValid) {
+                    throw new Error(nameValidation.message);
+                }
+                updates.name = options.name;
+            }
+
+            // Validate and set color
+            if (options.color) {
+                const validColor = Validator.validateColor(options.color);
+                if (!validColor) {
+                    throw new Error('Warna role tidak valid.');
+                }
+                updates.color = validColor;
+            }
+
+            // Update role
+            const updatedRole = await role.edit(updates, 
+                `Role updated by user ID: ${options.updatedBy}`);
+
+            // Update icon if provided
+            if (options.icon) {
+                if (!Validator.validateIconUrl(options.icon)) {
+                    throw new Error('URL icon tidak valid.');
+                }
+                await updatedRole.setIcon(options.icon);
+            }
+
             // Log role update
-            await Logger.log('ROLE_EDITED', {
-                guildId: role.guild.id,
+            await Logger.log('ROLE_UPDATE', {
                 type: 'ROLE_UPDATE',
+                guildId: role.guild.id,
                 roleId: role.id,
-                updates: {
-                    name: name,
-                    color: color,
-                    icon: icon
-                },
-                timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
+                updatedBy: options.updatedBy,
+                changes: updates,
+                timestamp: '2025-01-15 08:13:20'
             });
 
             return updatedRole;
 
         } catch (error) {
-            console.error('Error editing role:', error);
             throw error;
         }
     }
 
     /**
-     * Remove a custom role from a member
-     * @param {GuildMember} member - The member to remove the role from
+     * Deletes a role
+     * @param {Role} role - Discord role
+     * @param {string} reason - Reason for deletion
      * @returns {Promise<void>}
      */
-    static async removeCustomRole(member) {
+    static async deleteRole(role, reason = '') {
         try {
-            const customRole = member.roles.cache.find(role => 
-                role.name.startsWith('[Custom]') &&
-                role.members.has(member.id)
-            );
+            const roleData = {
+                id: role.id,
+                guildId: role.guild.id,
+                name: role.name
+            };
 
-            if (customRole) {
-                // Remove role from member
-                await member.roles.remove(customRole);
+            await role.delete(reason);
 
-                // Delete the role
-                await customRole.delete('Member unboost');
-
-                // Log role removal
-                await Logger.log('ROLE_REMOVED', {
-                    guildId: member.guild.id,
-                    type: 'ROLE_REMOVE',
-                    userId: member.id,
-                    roleId: customRole.id,
-                    timestamp: moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss')
-                });
-            }
+            // Log role deletion
+            await Logger.log('ROLE_DELETE', {
+                type: 'ROLE_DELETE',
+                guildId: roleData.guildId,
+                roleId: roleData.id,
+                roleName: roleData.name,
+                reason: reason,
+                timestamp: '2025-01-15 08:13:20'
+            });
 
         } catch (error) {
-            console.error('Error removing custom role:', error);
             throw error;
         }
     }
 
     /**
-     * Save role data to storage
-     * @param {string} guildId - Guild ID
-     * @param {string} roleId - Role ID
-     * @param {Object} data - Role data to save
-     * @returns {Promise<void>}
+     * Gets role data including members
+     * @param {Role} role - Discord role
+     * @returns {Object} Role data
      */
-    static async saveRoleData(guildId, roleId, data) {
-        try {
-            // Implementation for saving role data
-            // This would typically involve writing to a database or file
-            console.log('Saving role data:', { guildId, roleId, data });
-        } catch (error) {
-            console.error('Error saving role data:', error);
-            throw error;
+    static getRoleData(role) {
+        return {
+            id: role.id,
+            name: role.name,
+            color: role.hexColor,
+            memberCount: role.members.size,
+            createdAt: moment(role.createdAt).utc().format('YYYY-MM-DD HH:mm:ss'),
+            isHoisted: role.hoist,
+            isMentionable: role.mentionable,
+            position: role.position,
+            members: Array.from(role.members.values()).map(member => ({
+                id: member.id,
+                tag: member.user.tag,
+                joinedAt: moment(member.joinedAt).utc().format('YYYY-MM-DD HH:mm:ss')
+            }))
+        };
+    }
+
+    /**
+     * Checks if a role is a test role
+     * @param {Role} role - Discord role
+     * @returns {boolean}
+     */
+    static isTestRole(role) {
+        return role.name.startsWith('[TEST]');
+    }
+
+    /**
+     * Gets all test roles in a guild
+     * @param {Guild} guild - Discord guild
+     * @returns {Collection<Role>}
+     */
+    static getTestRoles(guild) {
+        return guild.roles.cache.filter(role => this.isTestRole(role));
+    }
+
+    /**
+     * Checks if a member can manage a specific role
+     * @param {GuildMember} member - Discord guild member
+     * @param {Role} role - Discord role
+     * @returns {boolean}
+     */
+    static canManageRole(member, role) {
+        if (!member || !role) return false;
+
+        // Check if member has MANAGE_ROLES permission
+        if (!member.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
+            return false;
         }
+
+        // Check if member's highest role is higher than the target role
+        return member.roles.highest.position > role.position;
     }
 }
 
