@@ -118,13 +118,17 @@ class Logger {
      * @private
      */
     static async #loadLogs() {
-        try {
-            const data = await fs.readFile(this.#logPath, 'utf8');
-            return JSON.parse(data);
-        } catch (error) {
-            return [];
-        }
+    try {
+        const data = await fs.readFile(this.#logPath, 'utf8');
+        const logs = JSON.parse(data);
+        // Pastikan logs selalu array
+        return Array.isArray(logs) ? logs : [];
+    } catch (error) {
+        // Jika file tidak ada, buat baru
+        await fs.writeFile(this.#logPath, '[]', 'utf8').catch(() => {});
+        return [];
     }
+}
 
     /**
      * Loads config from file
