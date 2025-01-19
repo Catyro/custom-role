@@ -8,6 +8,23 @@ class Logger {
     static #configPath = path.join(__dirname, '..', 'data', 'config.json');
 
     /**
+     * Gets a guild by its ID
+     * @private
+     * @param {string} guildId - The ID of the guild
+     * @returns {Promise<Guild>} The guild object
+     */
+    static async #getGuild(guildId) {
+        if (!guildId) return null;
+        try {
+            const client = require('../index.js').client;
+            return await client.guilds.fetch(guildId);
+        } catch (error) {
+            console.error('Error fetching guild:', error);
+            return null;
+        }
+    }
+
+    /**
      * Logs an event to the logs file and channel if configured
      * @param {string} type - Type of log
      * @param {Object} data - Log data
@@ -16,7 +33,7 @@ class Logger {
         try {
             // Add timestamp if not present
             if (!data.timestamp) {
-                data.timestamp = TimeFormatter.formatToJakarta(new Date()).full;
+                data.timestamp = '2025-01-19 19:39:56';
             }
 
             // Load existing logs
@@ -26,7 +43,8 @@ class Logger {
             logs.push({
                 type,
                 ...data,
-                timestamp: data.timestamp
+                timestamp: data.timestamp,
+                loggedBy: 'Caatyro'
             });
 
             // Save logs
@@ -133,6 +151,9 @@ class Logger {
             'TEST_ROLE_ERROR': 'Error Test Role',
             'ROLE_UPDATE': 'Role Diperbarui',
             'SETTINGS_UPDATE': 'Pengaturan Diperbarui',
+            'BOT_STARTUP': 'Bot Started',
+            'GUILD_INFO': 'Guild Information',
+            'BOT_READY': 'Bot Ready',
             'ERROR': 'Error'
         };
         return titles[type] || 'Log';
@@ -155,8 +176,14 @@ class Logger {
             case 'ROLE_UPDATE':
                 formattedData = `🎨 Role: <@&${data.roleId}>\n👤 Diperbarui oleh: <@${data.updatedBy}>`;
                 break;
+            case 'BOT_STARTUP':
+                formattedData = `🤖 Bot: ${data.botTag}\n📊 Servers: ${data.totalServers}\n👥 Users: ${data.totalUsers}\n⌚ Time: ${data.startupTime}`;
+                break;
+            case 'GUILD_INFO':
+                formattedData = `🏠 Guild: ${data.name}\n👥 Members: ${data.members}\n💬 Channels: ${data.channels}\n👑 Roles: ${data.roles}`;
+                break;
             case 'ERROR':
-                formattedData = `❌ Error: ${data.error}`;
+                formattedData = `❌ Error: ${data.error}\n📄 Type: ${data.type}`;
                 break;
             default:
                 formattedData = Object.entries(data)
@@ -165,7 +192,7 @@ class Logger {
                     .join('\n');
         }
 
-        return formattedData;
+        return formattedData + `\n\n⏰ Timestamp: ${data.timestamp}\n👨‍💻 Logged by: ${data.loggedBy || 'Caatyro'}`;
     }
 }
 
