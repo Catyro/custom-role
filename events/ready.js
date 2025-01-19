@@ -38,7 +38,7 @@ module.exports = {
             `[💬] Channels   : ${client.channels.cache.size} channels`,
             `[⌚] Time       : ${timestamp}`,
             `[🤖] Bot Status : Online and ready!`,
-            `[👨‍💻] Developer  : ${config.DEVELOPER}`,
+            `[👨‍💻] Developer : ${config.DEVELOPER}`,
             '\n[✨] Custom Role Bot is now online and ready to serve!'
         ];
 
