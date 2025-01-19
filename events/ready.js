@@ -1,149 +1,81 @@
-const { ActivityType } = require('discord.js');
+const { Events } = require('discord.js');
 const Logger = require('../utils/logger');
-const moment = require('moment');
+const TimeFormatter = require('../utils/time-formatter');
+const config = require('../config');
 
 module.exports = {
-    name: 'ready',
+    name: Events.ClientReady,
     once: true,
     async execute(client) {
-        try {
-            // Initialize logger
-            await Logger.init();
+        // ASCII Art Banner
+        console.log('\n' + [
+            '╔═══════════════════════════════════════════════════════════════╗',
+            '║                                                               ║',
+            '║     ██████╗ ██╗   ██╗███████╗████████╗ ██████╗ ███╗   ███╗    ║',
+            '║    ██╔════╝ ██║   ██║██╔════╝╚══██╔══╝██╔═══██╗████╗ ████║    ║',
+            '║    ██║      ██║   ██║███████╗   ██║   ██║   ██║██╔████╔██║    ║',
+            '║    ██║      ██║   ██║╚════██║   ██║   ██║   ██║██║╚██╔╝██║    ║',
+            '║    ╚██████╗ ╚██████╔╝███████║   ██║   ╚██████╔╝██║ ╚═╝ ██║    ║',
+            '║     ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝    ║',
+            '║                                                               ║',
+            '║                    ██████╗  ██████╗ ██╗     ███████╗          ║',
+            '║                    ██╔══██╗██╔═══██╗██║     ██╔════╝          ║',
+            '║                    ██████╔╝██║   ██║██║     █████╗            ║',
+            '║                    ██╔══██╗██║   ██║██║     ██╔══╝            ║',
+            '║                    ██║  ██║╚██████╔╝███████╗███████╗          ║',
+            '║                    ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚══════╝          ║',
+            '║                                                               ║',
+            '╚═══════════════════════════════════════════════════════════════╝',
+        ].join('\n') + '\n');
 
-            // Set bot activity
-            client.user.setPresence({
-                activities: [{ 
-                    name: '/help',
-                    type: ActivityType.Listening
-                }],
-                status: 'online'
-            });
+        // Bot Information
+        const timestamp = TimeFormatter.getCurrentTimestamp();
+        const botInfo = [
+            `[📡] Gateway    : Connected as ${client.user.tag}`,
+            `[💓] Heartbeat  : ${client.ws.ping}ms`,
+            `[🏠] Guilds     : ${client.guilds.cache.size} servers`,
+            `[👥] Users      : ${client.users.cache.reduce((acc, user) => acc + (!user.bot ? 1 : 0), 0)} users`,
+            `[💬] Channels   : ${client.channels.cache.size} channels`,
+            `[⌚] Time       : ${timestamp}`,
+            `[🤖] Bot Status : Online and ready!`,
+            `[👨‍💻] Developer  : ${config.DEVELOPER}`,
+            '\n[✨] Custom Role Bot is now online and ready to serve!'
+        ];
 
-            // Log startup
-            console.log(`[${moment().utc().format('YYYY-MM-DD HH:mm:ss')}] Ready! Logged in as ${client.user.tag}`);
-            
-            await Logger.log('BOT_READY', {
-                type: 'STARTUP',
-                botId: client.user.id,
-                username: client.user.tag,
-                guilds: client.guilds.cache.size,
-                timestamp: '2025-01-15 08:47:51'
-            });
+        console.log(botInfo.join('\n'));
+        
+        // Set bot presence
+        client.user.setPresence({
+            activities: [{ 
+                name: `with ${client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0)} users | ${config.EMOJIS.ROLE}`,
+                type: 2 // "Listening to"
+            }],
+            status: 'online'
+        });
 
-            // Check test roles in all guilds
-            await checkTestRoles(client);
-
-            // Schedule regular checks
-            setInterval(() => checkTestRoles(client), 300000); // Every 5 minutes
-            setInterval(() => cleanupLogs(client), 86400000); // Every 24 hours
-
-        } catch (error) {
-            console.error('Error in ready event:', error);
-            await Logger.log('ERROR', {
-                type: 'READY_ERROR',
-                error: error.message,
-                timestamp: '2025-01-15 08:47:51'
+        // Log startup for each guild
+        for (const guild of client.guilds.cache.values()) {
+            await Logger.log('GUILD_INFO', {
+                id: guild.id,
+                name: guild.name,
+                members: guild.memberCount,
+                channels: guild.channels.cache.size,
+                roles: guild.roles.cache.size,
+                timestamp: timestamp,
+                loggedAt: timestamp
             });
         }
-    }
+
+        // Log bot startup
+        await Logger.log('BOT_STARTUP', {
+            botTag: client.user.tag,
+            totalServers: client.guilds.cache.size,
+            totalUsers: client.users.cache.reduce((acc, user) => acc + (!user.bot ? 1 : 0), 0),
+            totalCommands: client.commands.size,
+            startupTime: timestamp,
+            startedBy: config.DEVELOPER,
+            timestamp: timestamp,
+            loggedAt: timestamp
+        });
+    },
 };
-
-/**
- * Check and cleanup expired test roles
- * @param {Client} client - Discord client
- */
-async function checkTestRoles(client) {
-    try {
-        for (const [guildId, guild] of client.guilds.cache) {
-            // Get all test roles
-            const testRoles = guild.roles.cache.filter(role => 
-                role.name.startsWith('[TEST]')
-            );
-
-            if (!testRoles.size) continue;
-
-            for (const [roleId, role] of testRoles) {
-                // Check role age
-                const roleAge = Date.now() - role.createdTimestamp;
-                
-                // If role is older than 2 minutes + 30s buffer
-                if (roleAge > 150000) {
-                    try {
-                        // Get role members
-                        const members = role.members;
-                        
-                        // Remove role from all members
-                        for (const [memberId, member] of members) {
-                            await member.roles.remove(role);
-                            
-                            // Try to send DM
-                            try {
-                                await member.send({
-                                    content: `⌛ Role test kamu di server ${guild.name} telah berakhir.`
-                                });
-                            } catch {
-                                // Ignore DM errors
-                            }
-                        }
-
-                        // Delete role
-                        await role.delete('Test role expired');
-
-                        await Logger.log('TEST_ROLE_EXPIRE', {
-                            guildId: guildId,
-                            type: 'TEST_ROLE_AUTO_EXPIRE',
-                            roleId: roleId,
-                            memberCount: members.size,
-                            timestamp: '2025-01-15 08:47:51'
-                        });
-
-                    } catch (error) {
-                        console.error(`Error cleaning up test role ${roleId}:`, error);
-                        await Logger.log('ERROR', {
-                            guildId: guildId,
-                            type: 'TEST_ROLE_CLEANUP_ERROR',
-                            roleId: roleId,
-                            error: error.message,
-                            timestamp: '2025-01-15 08:47:51'
-                        });
-                    }
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Error in checkTestRoles:', error);
-        await Logger.log('ERROR', {
-            type: 'TEST_ROLES_CHECK_ERROR',
-            error: error.message,
-            timestamp: '2025-01-15 08:47:51'
-        });
-    }
-}
-
-/**
- * Cleanup old logs
- * @param {Client} client - Discord client
- */
-async function cleanupLogs(client) {
-    try {
-        for (const [guildId, guild] of client.guilds.cache) {
-            const deletedCount = await Logger.clearOldLogs(guildId);
-            
-            if (deletedCount > 0) {
-                await Logger.log('LOGS_CLEANUP', {
-                    guildId: guildId,
-                    type: 'OLD_LOGS_DELETED',
-                    count: deletedCount,
-                    timestamp: '2025-01-15 08:47:51'
-                });
-            }
-        }
-    } catch (error) {
-        console.error('Error in cleanupLogs:', error);
-        await Logger.log('ERROR', {
-            type: 'LOGS_CLEANUP_ERROR',
-            error: error.message,
-            timestamp: '2025-01-15 08:47:51'
-        });
-    }
-}
