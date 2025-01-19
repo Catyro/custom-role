@@ -8,6 +8,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 const Logger = require('./utils/logger');
+require('dotenv').config();
 
 // Create client instance
 const client = new Client({
