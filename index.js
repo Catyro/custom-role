@@ -227,3 +227,5 @@ client.once(Events.ClientReady, async () => {
 });
 // Login
 client.login(process.env.TOKEN);
+
+module.exports = { client };
