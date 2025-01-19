@@ -1,23 +1,37 @@
 {
   "name": "custom-role-bot",
   "version": "1.0.0",
-  "description": "Discord bot for managing custom roles for server boosters",
+  "description": "A Discord bot for managing custom roles with advanced features",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "lint": "eslint .",
     "test": "jest"
   },
-  "author": "Catyro",
-  "license": "MIT",
   "dependencies": {
-    "discord.js": "^14.11.0",
-    "dotenv": "^16.0.3",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "fs": "^0.0.1-security",
+    "moment": "^2.29.4",
     "moment-timezone": "^0.5.43",
-    "node-fetch": "^2.6.9"
+    "path": "^0.12.7"
   },
   "devDependencies": {
-    "jest": "^29.5.0",
-    "nodemon": "^2.0.22"
-  }
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2"
+  },
+  "author": "Catyro",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Catyro/custom-role"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "custom-roles",
+    "discord.js"
+  ]
 }
