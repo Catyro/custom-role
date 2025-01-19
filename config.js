@@ -5,7 +5,7 @@ module.exports = {
     
     // Timezone settings
     TIMEZONE: 'Asia/Jakarta',
-    TIME_FORMAT: 'DD/MM/YYYY HH:mm:ss',
+    TIME_FORMAT: 'YYYY-MM-DD HH:mm:ss',
     
     // Role limits
     ROLE_LIMITS: {
@@ -20,20 +20,22 @@ module.exports = {
     COOLDOWNS: {
         CREATE_ROLE: 300000,  // 5 minutes
         EDIT_ROLE: 60000,     // 1 minute
-        TEST_ROLE: 300000     // 5 minutes
+        TEST_ROLE: 300000,    // 5 minutes
+        BOOST_LEADERBOARD: 10000, // 10 seconds
+        SETTINGS: 5000        // 5 seconds
     },
     
     // Embed colors
     EMBED_COLORS: {
-        PRIMARY: '#007bff',    // Biru
-        SUCCESS: '#28a745',    // Hijau
-        ERROR: '#dc3545',      // Merah
-        WARNING: '#ffc107',    // Kuning
-        INFO: '#17a2b8',       // Biru Muda
-        BOOST: '#ff73fa'       // Pink Discord Nitro
+        PRIMARY: '#F47FFF',    // Main Color
+        SUCCESS: '#57F287',    // Green
+        ERROR: '#ED4245',      // Red
+        WARNING: '#FEE75C',    // Yellow
+        INFO: '#5865F2',       // Blue
+        BOOST: '#FF73FA'       // Discord Nitro Pink
     },
 
-    // Emoji custom
+    // Custom Emojis
     EMOJIS: {
         SUCCESS: '✅',
         ERROR: '❌',
@@ -48,6 +50,28 @@ module.exports = {
         LIST: '📋',
         NEXT: '➡️',
         PREV: '⬅️',
-        CLOSE: '❌'
+        CLOSE: '❌',
+        EDIT: '✏️',
+        DELETE: '🗑️',
+        COLOR: '🎨',
+        ICON: '🖼️',
+        TIME: '⏰',
+        PREVIEW: '👀'
+    },
+
+    // Logger settings
+    LOGGER: {
+        enabled: true,
+        logToFile: true,
+        logToConsole: true,
+        logToChannel: true,
+        format: '[{timestamp}] [{type}] {message}'
+    },
+
+    // Command Permissions
+    PERMISSIONS: {
+        MANAGE_ROLES: true,
+        VIEW_AUDIT_LOG: true,
+        MANAGE_GUILD: true
     }
 };
